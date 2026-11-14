@@ -1,20 +1,929 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aplikasi Token RJ dan Diamond</title>
-    <!-- Tailwind CSS CDN -->
+    <title>Ternak Money $$$ - Platform Mining & Investasi Cerdas</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#050508',
+                        cardBg: '#0c0a1d',
+                        neonPurple: '#a855f7',
+                        neonPink: '#d946ef',
+                        neonDark: '#7e22ce'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase SDK (Modular v11) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase tools globally
+        window.firebaseAppInit = async () => {
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'ternak-money-default';
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "demo", projectId: "demo" };
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                const db = getFirestore(app);
+                
+                window.fbAuth = auth;
+                window.fbDb = db;
+                window.fbAppId = appId;
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.log("Firebase fallback mode active:", e);
+            }
+        };
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #050508;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        .neon-glow {
+            text-shadow: 0 0 10px rgba(168, 85, 247, 0.7), 0 0 20px rgba(217, 70, 239, 0.5);
+        }
+        .neon-border {
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.3), inset 0 0 15px rgba(168, 85, 247, 0.1);
+            border: 1px solid rgba(168, 85, 247, 0.5);
+        }
+        .neon-btn {
+            background: linear-gradient(135deg, #7e22ce, #a855f7);
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+            transition: all 0.3s ease;
+        }
+        .neon-btn:hover {
+            box-shadow: 0 0 30px rgba(217, 70, 239, 0.8);
+            transform: translateY(-2px);
+        }
+        @keyframes pulseReactor {
+            0% { transform: scale(1); opacity: 0.8; filter: drop-shadow(0 0 10px #a855f7); }
+            50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 25px #d946ef); }
+            100% { transform: scale(1); opacity: 0.8; filter: drop-shadow(0 0 10px #a855f7); }
+        }
+        .reactor-anim {
+            animation: pulseReactor 3s infinite ease-in-out;
+        }
+        @keyframes rotateRing {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spin-ring {
+            animation: rotateRing 10s linear infinite;
+        }
+        .glass-panel {
+            background: rgba(12, 10, 29, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+    </style>
 </head>
-<body class="min-h-screen flex flex-col">
-    <div id="app-container">
-        <!-- Konten utama dimuat oleh script.js -->
+<body class="min-h-screen flex flex-col bg-darkBg">
+
+    <!-- Header & Navigation -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-purple-900/40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('mining')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-900 to-pink-600 flex items-center justify-center neon-border">
+                    <i class="fa-solid fa-coins text-white text-xl animate-bounce"></i>
+                </div>
+                <div>
+                    <span class="font-orbitron font-extrabold text-xl sm:text-2xl text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500 neon-glow">
+                        TERNAK MONEY $$$
+                    </span>
+                    <p class="text-xs text-purple-300 font-medium">Auto Mining & Investment</p>
+                </div>
+            </div>
+
+            <!-- Desktop Nav Menu -->
+            <nav class="hidden md:flex items-center space-x-1 lg:space-x-2">
+                <button onclick="switchTab('profil')" id="nav-profil" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
+                    <i class="fa-solid fa-user-gear mr-2"></i> Profil
+                </button>
+                <button onclick="switchTab('mining')" id="nav-mining" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-white bg-purple-900/60 neon-border">
+                    <i class="fa-solid fa-microchip mr-2"></i> Mining Gratis
+                </button>
+                <button onclick="switchTab('paket')" id="nav-paket" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
+                    <i class="fa-solid fa-box-open mr-2"></i> Paket Hemat
+                </button>
+                <button onclick="switchTab('tutorial')" id="nav-tutorial" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
+                    <i class="fa-solid fa-book-open mr-2"></i> Tutorial & Voucher
+                </button>
+                <button onclick="switchTab('riwayat')" id="nav-riwayat" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
+                    <i class="fa-solid fa-clock-rotate-left mr-2"></i> Riwayat
+                </button>
+                <button onclick="switchTab('cs')" id="nav-cs" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
+                    <i class="fa-solid fa-headset mr-2"></i> CS 24/7
+                </button>
+            </nav>
+
+            <!-- User Status & Auth -->
+            <div class="flex items-center space-x-3">
+                <div id="auth-container">
+                    <button onclick="handleGoogleLogin()" class="hidden sm:inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">
+                        <i class="fa-brands fa-google mr-2"></i> Login Google
+                    </button>
+                </div>
+                <button onclick="openMobileMenu()" class="md:hidden p-2 rounded-xl bg-purple-900/40 text-purple-300 hover:text-white">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Nav Drawer -->
+        <div id="mobile-menu" class="hidden md:hidden glass-panel border-t border-purple-900/40 px-4 pt-2 pb-4 space-y-2">
+            <button onclick="switchTab('profil'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-user-gear mr-3"></i> Profil
+            </button>
+            <button onclick="switchTab('mining'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-microchip mr-3"></i> Mining Gratis
+            </button>
+            <button onclick="switchTab('paket'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-box-open mr-3"></i> Paket Hemat
+            </button>
+            <button onclick="switchTab('tutorial'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-book-open mr-3"></i> Tutorial & Voucher
+            </button>
+            <button onclick="switchTab('riwayat'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-clock-rotate-left mr-3"></i> Riwayat Transaksi
+            </button>
+            <button onclick="switchTab('cs'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
+                <i class="fa-solid fa-headset mr-3"></i> Customer Service
+            </button>
+            <div id="mobile-auth-btn" class="pt-2 border-t border-purple-900/40">
+                <button onclick="handleGoogleLogin()" class="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition">
+                    <i class="fa-brands fa-google mr-2"></i> Login Google / Sinkronisasi
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- TAB: MINING GRATIS -->
+        <section id="tab-mining" class="tab-content space-y-8">
+            <div class="text-center max-w-2xl mx-auto space-y-3">
+                <h1 class="font-orbitron text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-600">
+                    Mesin Mining Rupiah 24/7
+                </h1>
+                <p class="text-sm sm:text-base text-purple-200/80">
+                    Nikmati penghasilan pasif otomatis Rp 5.000 / hari dari mesin mining gratis, plus boost kecepatan dari paket investasi Anda!
+                </p>
+            </div>
+
+            <!-- Mining Dashboard Card -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+                
+                <!-- Left: Stat Info -->
+                <div class="glass-panel p-6 rounded-3xl space-y-6 neon-border">
+                    <div class="flex items-center justify-between border-b border-purple-900/50 pb-4">
+                        <span class="text-sm text-purple-300 font-medium">Kecepatan Mining</span>
+                        <span id="mining-rate-display" class="font-orbitron font-bold text-pink-400">+Rp 5.000 / Hari</span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-purple-900/50 pb-4">
+                        <span class="text-sm text-purple-300 font-medium">Status Mesin</span>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                            <i class="fa-solid fa-circle text-[8px] mr-1.5"></i> AKTIF BERJALAN
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between border-b border-purple-900/50 pb-4">
+                        <span class="text-sm text-purple-300 font-medium">Paket Aktif</span>
+                        <span id="active-package-name" class="font-bold text-purple-200">Paket Gratis (5rb/hr)</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-purple-300 font-medium">Sisa Masa Aktif</span>
+                        <span id="active-package-days" class="font-bold text-pink-400">Selamanya</span>
+                    </div>
+                </div>
+
+                <!-- Center: Visual Reactor Animation -->
+                <div class="flex flex-col items-center justify-center py-6">
+                    <div class="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
+                        <!-- Outer Spinning Ring -->
+                        <div class="absolute inset-0 rounded-full border-2 border-dashed border-purple-500/40 spin-ring"></div>
+                        <!-- Inner Glowing Ring -->
+                        <div class="absolute inset-4 rounded-full border-4 border-pink-500/30 animate-ping opacity-25"></div>
+                        <!-- Core Reactor -->
+                        <div class="w-44 h-44 sm:w-48 sm:h-48 rounded-full bg-gradient-to-tr from-purple-900 via-purple-700 to-pink-600 flex flex-col items-center justify-center neon-border reactor-anim shadow-2xl z-10">
+                            <i class="fa-solid fa-bolt-lightning text-4xl text-yellow-300 mb-2 drop-shadow-[0_0_10px_rgba(253,224,71,0.8)]"></i>
+                            <span class="text-[11px] text-purple-200 font-bold uppercase tracking-wider">Akumulasi Real-Time</span>
+                            <span id="unclaimed-balance" class="font-orbitron font-extrabold text-lg sm:text-xl text-white mt-1">Rp 0</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-purple-300 mt-6 text-center">
+                        <i class="fa-solid fa-circle-info text-pink-400 mr-1"></i> Saldo bertambah otomatis setiap detik. Klik klaim untuk memindahkan ke saldo utama!
+                    </p>
+                </div>
+
+                <!-- Right: Claim Action & Balance -->
+                <div class="glass-panel p-6 rounded-3xl space-y-6 neon-border text-center">
+                    <div>
+                        <span class="text-xs text-purple-300 uppercase tracking-widest font-semibold">Total Saldo Utama</span>
+                        <h2 id="main-balance" class="font-orbitron text-3xl sm:text-4xl font-extrabold text-white mt-2 neon-glow">Rp 0</h2>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <button onclick="claimMining()" class="w-full py-4 rounded-2xl font-bold text-white neon-btn flex items-center justify-center space-x-2 shadow-xl hover:scale-105 transition-all">
+                            <i class="fa-solid fa-hand-holding-dollar text-xl"></i>
+                            <span>KLAIM HASIL MINING</span>
+                        </button>
+                        <button onclick="switchTab('paket')" class="w-full py-3 rounded-2xl font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/50 transition">
+                            <i class="fa-solid fa-rocket mr-2"></i> Upgrade Paket Mining
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TAB: PROFIL -->
+        <section id="tab-profil" class="tab-content hidden space-y-8">
+            <div class="max-w-3xl mx-auto glass-panel p-6 sm:p-8 rounded-3xl neon-border space-y-6">
+                <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 border-b border-purple-900/50 pb-6">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-700 to-pink-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                        <span id="user-initials">TM</span>
+                    </div>
+                    <div class="text-center sm:text-left">
+                        <h2 id="user-display-name" class="font-orbitron text-xl sm:text-2xl font-bold text-white">Guest User</h2>
+                        <p id="user-email-display" class="text-xs sm:text-sm text-purple-300 mt-1">Belum login Google / Menggunakan Sesi Lokal</p>
+                        <div class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                            <i class="fa-solid fa-shield-halved mr-1.5 text-pink-400"></i> Member Aktif Ternak Money
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="p-4 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-purple-400 font-medium">ID Member</p>
+                            <p id="user-id-display" class="font-orbitron font-bold text-white mt-1 text-sm">TM-982341</p>
+                        </div>
+                        <i class="fa-solid fa-id-card text-2xl text-purple-500"></i>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-purple-400 font-medium">Status Akun</p>
+                            <p class="font-bold text-emerald-400 mt-1 text-sm"><i class="fa-solid fa-check-circle mr-1"></i> Terverifikasi</p>
+                        </div>
+                        <i class="fa-solid fa-user-check text-2xl text-emerald-500"></i>
+                    </div>
+                </div>
+
+                <div class="p-5 rounded-2xl bg-purple-950/30 border border-purple-900/40 space-y-4">
+                    <h3 class="font-orbitron font-bold text-white text-base">Aksi Penarikan Saldo (WD)</h3>
+                    <p class="text-xs text-purple-300">
+                        Minimal penarikan saldo adalah Rp 35.000. Saat Anda melakukan penarikan, saldo utama akan otomatis direset menjadi Rp 0 dan kode WD acak akan dibuat untuk dikirim ke Customer Service.
+                    </p>
+                    <div class="flex flex-col sm:flex-row items-center gap-4 pt-2">
+                        <button onclick="withdrawSaldo()" class="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 shadow-lg transition">
+                            <i class="fa-solid fa-money-bill-transfer mr-2"></i> Tarik Saldo (WD Min 35rb)
+                        </button>
+                        <button onclick="switchTab('riwayat')" class="w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-purple-300 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-700/50 transition">
+                            <i class="fa-solid fa-clock-rotate-left mr-2"></i> Cek Riwayat Penarikan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: PAKET HEMAT -->
+        <section id="tab-paket" class="tab-content hidden space-y-8">
+            <div class="text-center max-w-2xl mx-auto space-y-3">
+                <h1 class="font-orbitron text-3xl sm:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+                    Pilihan Paket Hemat Investasi
+                </h1>
+                <p class="text-sm sm:text-base text-purple-200/80">
+                    Tingkatkan kecepatan mining harian Anda dengan memilih paket investasi hemat berdurasi 30 hari.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                <!-- Paket Hemat 1 -->
+                <div class="glass-panel p-6 rounded-3xl neon-border flex flex-col justify-between relative overflow-hidden group hover:scale-105 transition-all">
+                    <div class="absolute top-0 right-0 bg-purple-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                        Populer
+                    </div>
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-900/60 flex items-center justify-center text-pink-400 text-xl">
+                            <i class="fa-solid fa-bolt"></i>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-xl text-white">Paket Hemat 1</h3>
+                        <p class="text-xs text-purple-300">Cocok untuk pemula yang ingin melipatgandakan hasil mining.</p>
+                        
+                        <div class="py-4 border-y border-purple-900/50 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Pendapatan:</span>
+                                <span class="font-bold text-emerald-400">Rp 10.000 / hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Masa Aktif:</span>
+                                <span class="font-bold text-white">30 Hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Total Return:</span>
+                                <span class="font-bold text-pink-400">Rp 300.000</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center py-2">
+                            <span class="text-xs text-purple-400">Harga Paket</span>
+                            <div class="font-orbitron text-2xl font-extrabold text-white">Rp 100.000</div>
+                        </div>
+                    </div>
+
+                    <button onclick="buyPackage('Paket Hemat 1', 100000, 10000, 30)" class="w-full mt-6 py-3.5 rounded-xl font-bold text-white neon-btn shadow-lg">
+                        Beli / Aktifkan Paket
+                    </button>
+                </div>
+
+                <!-- Paket Hemat 2 -->
+                <div class="glass-panel p-6 rounded-3xl neon-border flex flex-col justify-between relative overflow-hidden group hover:scale-105 transition-all border-pink-500/50">
+                    <div class="absolute top-0 right-0 bg-pink-600 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                        Rekomendasi
+                    </div>
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-pink-900/60 flex items-center justify-center text-pink-300 text-xl">
+                            <i class="fa-solid fa-fire"></i>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-xl text-white">Paket Hemat 2</h3>
+                        <p class="text-xs text-purple-300">Keuntungan lebih besar dengan hasil stabil setiap hari.</p>
+                        
+                        <div class="py-4 border-y border-purple-900/50 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Pendapatan:</span>
+                                <span class="font-bold text-emerald-400">Rp 20.000 / hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Masa Aktif:</span>
+                                <span class="font-bold text-white">30 Hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Total Return:</span>
+                                <span class="font-bold text-pink-400">Rp 600.000</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center py-2">
+                            <span class="text-xs text-purple-400">Harga Paket</span>
+                            <div class="font-orbitron text-2xl font-extrabold text-white">Rp 200.000</div>
+                        </div>
+                    </div>
+
+                    <button onclick="buyPackage('Paket Hemat 2', 200000, 20000, 30)" class="w-full mt-6 py-3.5 rounded-xl font-bold text-white neon-btn shadow-lg">
+                        Beli / Aktifkan Paket
+                    </button>
+                </div>
+
+                <!-- Paket Hemat 3 -->
+                <div class="glass-panel p-6 rounded-3xl neon-border flex flex-col justify-between relative overflow-hidden group hover:scale-105 transition-all">
+                    <div class="absolute top-0 right-0 bg-purple-700 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                        VIP Max
+                    </div>
+                    <div class="space-y-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-900/60 flex items-center justify-center text-yellow-300 text-xl">
+                            <i class="fa-solid fa-crown"></i>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-xl text-white">Paket Hemat 3</h3>
+                        <p class="text-xs text-purple-300">Paket tertinggi untuk profit maksimal tanpa batas.</p>
+                        
+                        <div class="py-4 border-y border-purple-900/50 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Pendapatan:</span>
+                                <span class="font-bold text-emerald-400">Rp 30.000 / hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Masa Aktif:</span>
+                                <span class="font-bold text-white">30 Hari</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-purple-400">Total Return:</span>
+                                <span class="font-bold text-pink-400">Rp 900.000</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center py-2">
+                            <span class="text-xs text-purple-400">Harga Paket</span>
+                            <div class="font-orbitron text-2xl font-extrabold text-white">Rp 300.000</div>
+                        </div>
+                    </div>
+
+                    <button onclick="buyPackage('Paket Hemat 3', 300000, 30000, 30)" class="w-full mt-6 py-3.5 rounded-xl font-bold text-white neon-btn shadow-lg">
+                        Beli / Aktifkan Paket
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- TAB: TUTORIAL & VOUCHER -->
+        <section id="tab-tutorial" class="tab-content hidden space-y-8">
+            <div class="max-w-3xl mx-auto space-y-6">
+                <div class="text-center space-y-3">
+                    <h1 class="font-orbitron text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+                        Tutorial Top Up & Klaim Saldo
+                    </h1>
+                    <p class="text-sm text-purple-200">Panduan lengkap cara melakukan penambahan saldo dan klaim voucher dari Customer Service.</p>
+                </div>
+
+                <!-- Tutorial Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass-panel p-6 rounded-3xl neon-border space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-900/60 flex items-center justify-center text-pink-400 text-lg">
+                            <i class="fa-solid fa-wallet"></i>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-white text-lg">Cara Melakukan Top Up</h3>
+                        <p class="text-xs sm:text-sm text-purple-200 leading-relaxed">
+                            Cukup hubungi Customer Service dan masukkan jumlah yang ingin di top-up (contoh: 200rb). Tunggu respon Customer Service, lalu jika sudah mentransfer mohon kirimkan bukti transfer. Anda akan diberikan kode voucher atau saldo akan langsung masuk ke akun Anda!
+                        </p>
+                    </div>
+
+                    <div class="glass-panel p-6 rounded-3xl neon-border space-y-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-900/60 flex items-center justify-center text-pink-400 text-lg">
+                            <i class="fa-solid fa-money-check-dollar"></i>
+                        </div>
+                        <h3 class="font-orbitron font-bold text-white text-lg">Cara Melakukan Penarikan (WD)</h3>
+                        <p class="text-xs sm:text-sm text-purple-200 leading-relaxed">
+                            Cukup masukkan nominal penarikan minimal Rp 35.000 di menu Profil. Saldo akan otomatis mereset ke Rp 0 dan menghasilkan kode WD. Kirim bukti atau kode penarikan ke CS, tunggu respon sekitar 10 menit, dan dana akan masuk ke dompet Anda!
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Voucher Klaim Box -->
+                <div class="glass-panel p-6 sm:p-8 rounded-3xl neon-border space-y-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-800 to-pink-600 flex items-center justify-center text-white text-xl">
+                            <i class="fa-solid fa-ticket"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-orbitron font-bold text-white text-lg">Klaim Kode Voucher Saldo</h3>
+                            <p class="text-xs text-purple-300">Masukkan kode voucher rahasia yang Anda dapatkan dari Customer Service untuk tambah saldo instan!</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <input type="text" id="voucher-input" placeholder="Masukkan Kode Voucher (cth: KODE-XXXX)" class="flex-grow px-4 py-3.5 rounded-xl bg-darkBg border border-purple-800 text-white text-sm focus:outline-none focus:border-pink-500 uppercase font-orbitron">
+                        <button onclick="claimVoucher()" class="px-8 py-3.5 rounded-xl font-bold text-white neon-btn shadow-lg">
+                            Klaim Voucher
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: RIWAYAT TRANSAKSI -->
+        <section id="tab-riwayat" class="tab-content hidden space-y-8">
+            <div class="max-w-4xl mx-auto space-y-6">
+                <div class="text-center space-y-3">
+                    <h1 class="font-orbitron text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+                        Riwayat Transaksi & Penarikan
+                    </h1>
+                    <p class="text-sm text-purple-200">Catatan lengkap riwayat top-up, voucher, dan pengajuan penarikan saldo Anda.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Topup & Voucher History -->
+                    <div class="glass-panel p-6 rounded-3xl neon-border space-y-4">
+                        <h3 class="font-orbitron font-bold text-white text-base flex items-center">
+                            <i class="fa-solid fa-file-invoice-dollar mr-2 text-pink-400"></i> Riwayat Saldo Masuk
+                        </h3>
+                        <div id="topup-history-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            <p class="text-xs text-purple-400 text-center py-6">Belum ada riwayat saldo masuk.</p>
+                        </div>
+                    </div>
+
+                    <!-- Withdrawal History -->
+                    <div class="glass-panel p-6 rounded-3xl neon-border space-y-4">
+                        <h3 class="font-orbitron font-bold text-white text-base flex items-center">
+                            <i class="fa-solid fa-money-bill-transfer mr-2 text-pink-400"></i> Riwayat Penarikan (WD)
+                        </h3>
+                        <div id="wd-history-list" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                            <p class="text-xs text-purple-400 text-center py-6">Belum ada riwayat pengajuan penarikan.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: CUSTOMER SERVICE -->
+        <section id="tab-cs" class="tab-content hidden space-y-8">
+            <div class="max-w-2xl mx-auto glass-panel p-8 rounded-3xl neon-border text-center space-y-6">
+                <div class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 mx-auto flex items-center justify-center text-white text-3xl shadow-xl">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </div>
+                <div class="space-y-2">
+                    <h1 class="font-orbitron text-2xl sm:text-3xl font-extrabold text-white">Customer Service 24/7</h1>
+                    <p class="text-sm text-purple-200">
+                        Butuh bantuan seputar top-up, konfirmasi bukti transfer, atau kendala penarikan saldo? Hubungi tim support kami melalui WhatsApp resmi.
+                    </p>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-purple-950/60 border border-purple-800/60 inline-block">
+                    <span class="text-xs text-purple-400 uppercase tracking-widest block font-medium">Nomor WhatsApp Resmi</span>
+                    <span class="font-orbitron text-2xl sm:text-3xl font-bold text-white tracking-wider mt-1 block">0831-3639-2786</span>
+                </div>
+
+                <div class="pt-4 flex flex-col sm:flex-row justify-center gap-4">
+                    <a href="https://wa.me/6283136392786?text=Halo%20Admin%20Ternak%20Money,%20saya%20ingin%20konfirmasi%20top-up/penarikan%20saldo." target="_blank" rel="noopener noreferrer" class="px-8 py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-xl flex items-center justify-center space-x-3 transition">
+                        <i class="fa-brands fa-whatsapp text-xl"></i>
+                        <span>Chat WhatsApp Sekarang</span>
+                    </a>
+                    <button onclick="copyCSNumber()" class="px-6 py-4 rounded-2xl font-bold text-purple-200 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-700/50 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-copy"></i>
+                        <span>Salin Nomor</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="glass-panel border-t border-purple-900/40 py-6 mt-12 text-center text-xs text-purple-400">
+        <p>&copy; 2026 Ternak Money $$$. All rights reserved. Tema Hitam Neon Ungu Cyberpunk.</p>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-28 opacity-0 transition-all duration-300 glass-panel px-6 py-4 rounded-2xl border border-purple-500 shadow-2xl flex items-center space-x-3">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-xl"></i>
+        <span id="toast-message" class="text-sm font-bold text-white">Notifikasi berhasil!</span>
     </div>
 
-    <script src="script.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Custom Modal Dialog -->
+    <div id="custom-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div class="glass-panel p-6 sm:p-8 rounded-3xl neon-border max-w-md w-full space-y-6 text-center animate-scaleUp">
+            <div id="modal-icon" class="w-16 h-16 rounded-2xl bg-purple-900/60 mx-auto flex items-center justify-center text-pink-400 text-2xl">
+                <i class="fa-solid fa-circle-exclamation"></i>
+            </div>
+            <div class="space-y-2">
+                <h3 id="modal-title" class="font-orbitron font-bold text-white text-xl">Konfirmasi</h3>
+                <p id="modal-desc" class="text-xs sm:text-sm text-purple-200">Apakah Anda yakin ingin melanjutkan?</p>
+            </div>
+            <div class="flex space-x-3 pt-2">
+                <button onclick="closeModal()" class="flex-1 py-3 rounded-xl font-bold text-purple-300 bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/50 transition">
+                    Batal
+                </button>
+                <button id="modal-confirm-btn" class="flex-1 py-3 rounded-xl font-bold text-white neon-btn shadow-lg">
+                    Ya, Lanjutkan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Application State Data
+        let state = {
+            balance: 0,
+            unclaimedBalance: 0,
+            dailyRate: 5000,
+            activePackageName: 'Paket Gratis (5rb/hr)',
+            activePackageDays: 'Selamanya',
+            topupHistory: [],
+            wdHistory: [],
+            claimedVouchers: []
+        };
+
+        // Voucher Database (Dynamic/Flexible for codes given by CS)
+        const voucherDatabase = {
+            'TERNAK10K': 10000,
+            'SULTAN20K': 20000,
+            'CUAN35K': 35000,
+            'BONUS50K': 50000,
+            'MINER75K': 75000,
+            'PROMO100K': 100000,
+            'VIP150K': 150000,
+            'JACKPOT200': 200000,
+            'GOKIL250': 250000,
+            'MAXIMUS500': 500000
+        };
+
+        // Load state on startup
+        document.addEventListener("DOMContentLoaded", async () => {
+            if (typeof window.firebaseAppInit === 'function') {
+                await window.firebaseAppInit();
+            }
+            loadData();
+            updateUI();
+            renderHistoryLists();
+
+            // Start Real-Time Mining Engine (every 1 second)
+            setInterval(() => {
+                const earningsPerSecond = state.dailyRate / 86400;
+                state.unclaimedBalance += earningsPerSecond;
+                document.getElementById('unclaimed-balance').innerText = formatRupiah(Math.floor(state.unclaimedBalance));
+                saveData();
+            }, 1000);
+        });
+
+        // Local Storage Management
+        function saveData() {
+            try {
+                localStorage.setItem('ternak_money_state', JSON.stringify(state));
+            } catch (e) {
+                console.error("Storage error:", e);
+            }
+        }
+
+        function loadData() {
+            try {
+                const saved = localStorage.getItem('ternak_money_state');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    state = { ...state, ...parsed };
+                }
+            } catch (e) {
+                console.error("Load storage error:", e);
+            }
+        }
+
+        // Format Rupiah helper
+        function formatRupiah(amount) {
+            return 'Rp ' + Math.floor(amount).toLocaleString('id-ID');
+        }
+
+        // Update User Interface
+        function updateUI() {
+            document.getElementById('main-balance').innerText = formatRupiah(state.balance);
+            document.getElementById('mining-rate-display').innerText = '+ ' + formatRupiah(state.dailyRate) + ' / Hari';
+            document.getElementById('active-package-name').innerText = state.activePackageName;
+            document.getElementById('active-package-days').innerText = state.activePackageDays;
+        }
+
+        // Tab Navigation
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-white', 'bg-purple-900/60', 'neon-border');
+                btn.classList.add('text-purple-300');
+            });
+
+            const targetTab = document.getElementById('tab-' + tabId);
+            if (targetTab) targetTab.classList.remove('hidden');
+
+            const targetNav = document.getElementById('nav-' + tabId);
+            if (targetNav) {
+                targetNav.classList.remove('text-purple-300');
+                targetNav.classList.add('text-white', 'bg-purple-900/60', 'neon-border');
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function openMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        }
+
+        function closeMobileMenu() {
+            document.getElementById('mobile-menu').classList.add('hidden');
+        }
+
+        // Toast Notification System
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = message;
+            toast.classList.remove('translate-y-28', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-28', 'opacity-0');
+            }, 3500);
+        }
+
+        // Custom Modal Controller
+        let modalConfirmCallback = null;
+        function showModal(title, desc, onConfirm) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerText = desc;
+            document.getElementById('custom-modal').classList.remove('hidden');
+            document.getElementById('custom-modal').classList.add('flex');
+            modalConfirmCallback = onConfirm;
+        }
+
+        function closeModal() {
+            document.getElementById('custom-modal').classList.remove('flex');
+            document.getElementById('custom-modal').classList.add('hidden');
+            modalConfirmCallback = null;
+        }
+
+        document.getElementById('modal-confirm-btn').addEventListener('click', () => {
+            if (modalConfirmCallback) modalConfirmCallback();
+            closeModal();
+        });
+
+        // Claim Mining Earnings
+        function claimMining() {
+            const claimable = Math.floor(state.unclaimedBalance);
+            if (claimable <= 0) {
+                showToast("Belum ada saldo mining yang bisa diklaim saat ini.");
+                return;
+            }
+            state.balance += claimable;
+            state.unclaimedBalance = 0;
+            showToast(`Berhasil mengklaim ${formatRupiah(claimable)} ke saldo utama!`);
+            saveData();
+            updateUI();
+        }
+
+        // Buy Package Logic
+        function buyPackage(packageName, price, dailyReturn, durationDays) {
+            if (state.balance < price) {
+                showToast(`Saldo Anda tidak mencukupi! Saldo Anda ${formatRupiah(state.balance)}, butuh ${formatRupiah(price)}. Silakan klaim voucher atau top-up.`);
+                return;
+            }
+
+            showModal(
+                "Konfirmasi Pembelian Paket",
+                `Beli ${packageName} seharga ${formatRupiah(price)}? Pendapatan harian akan menjadi ${formatRupiah(dailyReturn)} selama ${durationDays} hari.`,
+                () => {
+                    state.balance -= price;
+                    state.dailyRate = 5000 + dailyReturn; // Base 5rb + package bonus
+                    state.activePackageName = packageName;
+                    state.activePackageDays = durationDays + ' Hari Lagi';
+
+                    state.topupHistory.unshift({
+                        id: 'PKG-' + Math.floor(100000 + Math.random() * 900000),
+                        info: `Pembelian ${packageName}`,
+                        amount: -price,
+                        status: 'Berhasil / Aktif',
+                        time: new Date().toLocaleString('id-ID')
+                    });
+
+                    showToast(`Selamat! ${packageName} berhasil diaktifkan.`);
+                    saveData();
+                    updateUI();
+                    renderHistoryLists();
+                }
+            );
+        }
+
+        // Voucher Claiming
+        function claimVoucher() {
+            const input = document.getElementById('voucher-input');
+            const code = input.value.trim().toUpperCase();
+            if (!code) {
+                showToast("Masukkan kode voucher terlebih dahulu.");
+                return;
+            }
+
+            if (state.claimedVouchers.includes(code)) {
+                showToast("Kode voucher ini sudah pernah Anda klaim sebelumnya!");
+                return;
+            }
+
+            // Check if code exists in database or generate dynamic default value if custom code created by admin
+            let amount = voucherDatabase[code];
+            if (!amount) {
+                // If user types any custom code provided by CS, default to 50,000 or derive from code structure if needed
+                amount = 50000; 
+            }
+
+            state.balance += amount;
+            state.claimedVouchers.push(code);
+
+            state.topupHistory.unshift({
+                id: code,
+                info: `Klaim Voucher ${code}`,
+                amount: amount,
+                status: 'Sukses (Instan)',
+                time: new Date().toLocaleString('id-ID')
+            });
+
+            showToast(`Berhasil klaim voucher ${code}! Saldo bertambah ${formatRupiah(amount)}.`);
+            input.value = '';
+            saveData();
+            updateUI();
+            renderHistoryLists();
+        }
+
+        // Withdrawal Logic with Automatic Balance Reset to 0
+        function withdrawSaldo() {
+            if (state.balance < 35000) {
+                showToast("Minimal penarikan saldo adalah Rp 35.000.");
+                return;
+            }
+
+            const randomWdCode = 'WD-' + Math.floor(100000 + Math.random() * 900000);
+
+            showModal(
+                "Konfirmasi Penarikan Saldo (WD)",
+                `Tarik saldo sebesar ${formatRupiah(state.balance)}?\n\nKode WD Anda: ${randomWdCode}\n(Saldo Anda akan otomatis menjadi Rp 0 dan dikirim ke riwayat penarikan).`,
+                () => {
+                    const withdrawnAmount = state.balance;
+                    state.balance = 0;
+
+                    state.wdHistory.unshift({
+                        id: randomWdCode,
+                        amount: withdrawnAmount,
+                        status: 'Diproses CS (~10 Menit)',
+                        time: new Date().toLocaleString('id-ID')
+                    });
+
+                    showToast(`Pengajuan WD (${randomWdCode}) berhasil! Saldo direset ke Rp 0.`);
+                    saveData();
+                    updateUI();
+                    renderHistoryLists();
+                }
+            );
+        }
+
+        // Render History Lists
+        function renderHistoryLists() {
+            const topupContainer = document.getElementById('topup-history-list');
+            const wdContainer = document.getElementById('wd-history-list');
+
+            if (state.topupHistory.length === 0) {
+                topupContainer.innerHTML = `<p class="text-xs text-purple-400 text-center py-6">Belum ada riwayat saldo masuk.</p>`;
+            } else {
+                topupContainer.innerHTML = state.topupHistory.map(item => `
+                    <div class="p-3 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-white text-xs">${item.info}</p>
+                            <p class="text-[10px] text-purple-400">${item.time} • ID: ${item.id}</p>
+                        </div>
+                        <span class="font-orbitron font-bold text-xs ${item.amount > 0 ? 'text-emerald-400' : 'text-pink-400'}">
+                            ${item.amount > 0 ? '+' : ''}${formatRupiah(item.amount)}
+                        </span>
+                    </div>
+                `).join('');
+            }
+
+            if (state.wdHistory.length === 0) {
+                wdContainer.innerHTML = `<p class="text-xs text-purple-400 text-center py-6">Belum ada riwayat pengajuan penarikan.</p>`;
+            } else {
+                wdContainer.innerHTML = state.wdHistory.map(item => `
+                    <div class="p-3 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
+                        <div>
+                            <p class="font-bold text-white text-xs">${item.id}</p>
+                            <p class="text-[10px] text-purple-400">${item.time} • ${item.status}</p>
+                        </div>
+                        <span class="font-orbitron font-bold text-xs text-pink-400">
+                            -${formatRupiah(item.amount)}
+                        </span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Google Authentication simulation / integration
+        async function handleGoogleLogin() {
+            if (window.fbAuth && window.fbAuth.currentUser) {
+                const user = window.fbAuth.currentUser;
+                document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
+                document.getElementById('user-email-display').innerText = user.email || user.uid;
+                document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
+                showToast("Akun Anda telah disinkronkan dengan Google!");
+                return;
+            }
+
+            try {
+                const provider = new GoogleAuthProvider();
+                const result = await signInWithPopup(window.fbAuth, provider);
+                const user = result.user;
+                document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
+                document.getElementById('user-email-display').innerText = user.email;
+                document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
+                showToast(`Login Google Berhasil: Selamat datang, ${user.displayName}!`);
+            } catch (e) {
+                console.log("Popup login notice:", e);
+                showToast("Sesi lokal aktif. Progres Anda tersimpan aman di perangkat ini.");
+            }
+        }
+
+        // Copy CS Number helper
+        function copyCSNumber() {
+            const num = "083136392786";
+            const tempInput = document.createElement("input");
+            tempInput.value = num;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            showToast("Nomor CS 083136392786 berhasil disalin ke clipboard!");
+        }
+    </script>
 </body>
-</html>
+                            </html>
