@@ -236,7 +236,7 @@
                         </div>
                     </div>
                     <p class="text-xs text-purple-300 mt-6 text-center">
-                        <i class="fa-solid fa-circle-info text-pink-400 mr-1"></i> Saldo bertambah otomatis setiap detik. Klik klaim untuk memindahkan ke saldo utama!
+                        <i class="fa-solid fa-circle-info text-pink-400 mr-1"></i> Saldo dihitung berdasarkan waktu, termasuk saat aplikasi ditutup. Klik klaim untuk memindahkan ke saldo utama!
                     </p>
                 </div>
 
@@ -606,7 +606,9 @@
             activePackageDays: 'Selamanya',
             topupHistory: [],
             wdHistory: [],
-            claimedVouchers: []
+            claimedVouchers: [],
+            miningLastUpdate: Date.now(),
+            activePackageExpiresAt: null
         };
 
         // Voucher Database (Dynamic/Flexible for codes given by CS)
@@ -629,16 +631,39 @@
                 await window.firebaseAppInit();
             }
             loadData();
+
+            // Hitung hasil mining berdasarkan waktu yang berlalu, termasuk saat browser ditutup.
+            processMining();
             updateUI();
             renderHistoryLists();
 
-            // Start Real-Time Mining Engine (every 1 second)
+            // Tampilan diperbarui setiap detik. Perhitungan utama memakai timestamp,
+            // jadi tidak bergantung pada setInterval tetap berjalan di background.
             setInterval(() => {
-                const earningsPerSecond = state.dailyRate / 86400;
-                state.unclaimedBalance += earningsPerSecond;
-                document.getElementById('unclaimed-balance').innerText = formatRupiah(Math.floor(state.unclaimedBalance));
+                processMining();
+                updateUI();
                 saveData();
             }, 1000);
+
+            // Sinkronkan lagi saat aplikasi kembali aktif.
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    processMining();
+                    updateUI();
+                    saveData();
+                }
+            });
+            window.addEventListener('pageshow', () => {
+                processMining();
+                updateUI();
+                saveData();
+            });
+            window.addEventListener('focus', () => {
+                processMining();
+                updateUI();
+                saveData();
+            });
+            window.addEventListener('pagehide', saveData);
         });
 
         // Local Storage Management
@@ -660,6 +685,47 @@
             } catch (e) {
                 console.error("Load storage error:", e);
             }
+        }
+
+        // Akumulasi berbasis waktu: tetap menghitung selisih waktu saat halaman ditutup.
+        function processMining() {
+            const now = Date.now();
+            let last = Number(state.miningLastUpdate);
+
+            if (!Number.isFinite(last) || last <= 0 || last > now) {
+                state.miningLastUpdate = now;
+                return;
+            }
+
+            // Jika paket aktif, hitung tarif paket sampai masa aktif habis.
+            const expiry = Number(state.activePackageExpiresAt);
+            if (Number.isFinite(expiry) && expiry > last) {
+                const packageEnd = Math.min(now, expiry);
+                const packageMs = Math.max(0, packageEnd - last);
+                state.unclaimedBalance = Number(state.unclaimedBalance || 0) +
+                    (Number(state.dailyRate || 5000) * packageMs / 86400000);
+
+                if (now > expiry) {
+                    const freeMs = now - Math.max(last, expiry);
+                    state.unclaimedBalance += 5000 * freeMs / 86400000;
+                    state.dailyRate = 5000;
+                    state.activePackageName = 'Paket Gratis (5rb/hr)';
+                    state.activePackageDays = 'Selamanya';
+                    state.activePackageExpiresAt = null;
+                } else {
+                    const remaining = Math.max(0, Math.ceil((expiry - now) / 86400000));
+                    state.activePackageDays = remaining + ' Hari Lagi';
+                }
+            } else {
+                const elapsedMs = Math.max(0, now - last);
+                state.unclaimedBalance = Number(state.unclaimedBalance || 0) +
+                    (Number(state.dailyRate || 5000) * elapsedMs / 86400000);
+            }
+
+            state.unclaimedBalance = Math.max(0, state.unclaimedBalance);
+            state.miningLastUpdate = now;
+            const balanceEl = document.getElementById('unclaimed-balance');
+            if (balanceEl) balanceEl.innerText = formatRupiah(Math.floor(state.unclaimedBalance));
         }
 
         // Format Rupiah helper
@@ -736,6 +802,7 @@
 
         // Claim Mining Earnings
         function claimMining() {
+            processMining();
             const claimable = Math.floor(state.unclaimedBalance);
             if (claimable <= 0) {
                 showToast("Belum ada saldo mining yang bisa diklaim saat ini.");
@@ -759,10 +826,13 @@
                 "Konfirmasi Pembelian Paket",
                 `Beli ${packageName} seharga ${formatRupiah(price)}? Pendapatan harian akan menjadi ${formatRupiah(dailyReturn)} selama ${durationDays} hari.`,
                 () => {
+                    processMining();
                     state.balance -= price;
-                    state.dailyRate = 5000 + dailyReturn; // Base 5rb + package bonus
+                    state.dailyRate = 5000 + dailyReturn; // Tarif sesuai logika asli aplikasi
                     state.activePackageName = packageName;
+                    state.activePackageExpiresAt = Date.now() + (durationDays * 86400000);
                     state.activePackageDays = durationDays + ' Hari Lagi';
+                    state.miningLastUpdate = Date.now();
 
                     state.topupHistory.unshift({
                         id: 'PKG-' + Math.floor(100000 + Math.random() * 900000),
