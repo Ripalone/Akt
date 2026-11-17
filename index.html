@@ -25,10 +25,11 @@
     <!-- Google Fonts & FontAwesome -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase Authentication (Google Sign-In) -->
+    <!-- Firebase Authentication + Firestore -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Konfigurasi dari project Firebase Ternak Moneyy
         const firebaseConfig = {
@@ -44,14 +45,47 @@
         try {
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
+            const db = getFirestore(app);
+
             window.fbAuth = auth;
+            window.fbDb = db;
             window.firebaseAppInit = async () => true;
+
             window.fbSignInGoogle = async () => {
                 const provider = new GoogleAuthProvider();
                 provider.setCustomParameters({ prompt: "select_account" });
                 const result = await signInWithPopup(auth, provider);
                 return result.user;
             };
+
+            window.fbSignOut = async () => {
+                await signOut(auth);
+            };
+
+            window.fbOnAuthStateChanged = (callback) => {
+                return onAuthStateChanged(auth, callback);
+            };
+
+            // Helper Firestore
+            window.fbSaveUserData = async (uid, data) => {
+                if (!uid) return;
+                const ref = doc(db, "users", uid);
+                await setDoc(ref, {
+                    ...data,
+                    updatedAt: Date.now()
+                }, { merge: true });
+            };
+
+            window.fbLoadUserData = async (uid) => {
+                if (!uid) return null;
+                const ref = doc(db, "users", uid);
+                const snap = await getDoc(ref);
+                if (snap.exists()) {
+                    return snap.data();
+                }
+                return null;
+            };
+
         } catch (error) {
             console.error("Firebase initialization error:", error);
             window.firebaseInitError = error;
@@ -104,6 +138,10 @@
             backdrop-filter: blur(12px);
             border: 1px solid rgba(168, 85, 247, 0.2);
         }
+        .auth-loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col bg-darkBg">
@@ -151,7 +189,8 @@
             <!-- User Status & Auth -->
             <div class="flex items-center space-x-3">
                 <div id="auth-container">
-                    <button onclick="handleGoogleLogin()" class="hidden sm:inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">
+                    <!-- Diisi dinamis oleh JS -->
+                    <button onclick="handleGoogleLogin()" id="btn-login-desktop" class="hidden sm:inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">
                         <i class="fa-brands fa-google mr-2"></i> Login Google
                     </button>
                 </div>
@@ -185,9 +224,7 @@
                 <i class="fa-solid fa-headset mr-3"></i> Customer Service
             </button>
             <div id="mobile-auth-btn" class="pt-2 border-t border-purple-900/40">
-                <button onclick="handleGoogleLogin()" class="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition">
-                    <i class="fa-brands fa-google mr-2"></i> Login Google / Sinkronisasi
-                </button>
+                <!-- Diisi dinamis -->
             </div>
         </div>
     </header>
@@ -234,11 +271,8 @@
                 <!-- Center: Visual Reactor Animation -->
                 <div class="flex flex-col items-center justify-center py-6">
                     <div class="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
-                        <!-- Outer Spinning Ring -->
                         <div class="absolute inset-0 rounded-full border-2 border-dashed border-purple-500/40 spin-ring"></div>
-                        <!-- Inner Glowing Ring -->
                         <div class="absolute inset-4 rounded-full border-4 border-pink-500/30 animate-ping opacity-25"></div>
-                        <!-- Core Reactor -->
                         <div class="w-44 h-44 sm:w-48 sm:h-48 rounded-full bg-gradient-to-tr from-purple-900 via-purple-700 to-pink-600 flex flex-col items-center justify-center neon-border reactor-anim shadow-2xl z-10">
                             <i class="fa-solid fa-bolt-lightning text-4xl text-yellow-300 mb-2 drop-shadow-[0_0_10px_rgba(253,224,71,0.8)]"></i>
                             <span class="text-[11px] text-purple-200 font-bold uppercase tracking-wider">Akumulasi Real-Time</span>
@@ -331,14 +365,15 @@
         <section id="tab-profil" class="tab-content hidden space-y-8">
             <div class="max-w-3xl mx-auto glass-panel p-6 sm:p-8 rounded-3xl neon-border space-y-6">
                 <div class="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-6 border-b border-purple-900/50 pb-6">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-700 to-pink-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-700 to-pink-600 flex items-center justify-center text-3xl font-bold text-white shadow-lg overflow-hidden">
+                        <img id="user-photo" src="" alt="" class="w-full h-full object-cover hidden">
                         <span id="user-initials">TM</span>
                     </div>
                     <div class="text-center sm:text-left">
                         <h2 id="user-display-name" class="font-orbitron text-xl sm:text-2xl font-bold text-white">Guest User</h2>
                         <p id="user-email-display" class="text-xs sm:text-sm text-purple-300 mt-1">Belum login Google / Menggunakan Sesi Lokal</p>
                         <div class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                            <i class="fa-solid fa-shield-halved mr-1.5 text-pink-400"></i> Member Aktif Ternak Money
+                            <i class="fa-solid fa-shield-halved mr-1.5 text-pink-400"></i> <span id="member-status">Member Aktif Ternak Money</span>
                         </div>
                     </div>
                 </div>
@@ -347,14 +382,14 @@
                     <div class="p-4 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
                         <div>
                             <p class="text-xs text-purple-400 font-medium">ID Member</p>
-                            <p id="user-id-display" class="font-orbitron font-bold text-white mt-1 text-sm">TM-982341</p>
+                            <p id="user-id-display" class="font-orbitron font-bold text-white mt-1 text-sm">TM-GUEST</p>
                         </div>
                         <i class="fa-solid fa-id-card text-2xl text-purple-500"></i>
                     </div>
                     <div class="p-4 rounded-2xl bg-purple-950/40 border border-purple-900/40 flex items-center justify-between">
                         <div>
                             <p class="text-xs text-purple-400 font-medium">Status Akun</p>
-                            <p class="font-bold text-emerald-400 mt-1 text-sm"><i class="fa-solid fa-check-circle mr-1"></i> Terverifikasi</p>
+                            <p id="account-status" class="font-bold text-emerald-400 mt-1 text-sm"><i class="fa-solid fa-check-circle mr-1"></i> Terverifikasi</p>
                         </div>
                         <i class="fa-solid fa-user-check text-2xl text-emerald-500"></i>
                     </div>
@@ -378,6 +413,13 @@
                             <i class="fa-solid fa-clock-rotate-left mr-2"></i> Cek Riwayat Penarikan
                         </button>
                     </div>
+                </div>
+
+                <!-- Logout button di Profil -->
+                <div id="profil-logout-area" class="hidden pt-2">
+                    <button onclick="handleLogout()" class="w-full py-3 rounded-xl font-bold text-red-300 bg-red-900/30 hover:bg-red-900/50 border border-red-700/40 transition">
+                        <i class="fa-solid fa-right-from-bracket mr-2"></i> Logout dari Akun Google
+                    </button>
                 </div>
             </div>
         </section>
@@ -522,7 +564,6 @@
                     <p class="text-sm text-purple-200">Panduan lengkap cara melakukan penambahan saldo dan klaim voucher dari Customer Service.</p>
                 </div>
 
-                <!-- Tutorial Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="glass-panel p-6 rounded-3xl neon-border space-y-3">
                         <div class="w-10 h-10 rounded-xl bg-purple-900/60 flex items-center justify-center text-pink-400 text-lg">
@@ -545,7 +586,6 @@
                     </div>
                 </div>
 
-                <!-- Voucher Klaim Box -->
                 <div class="glass-panel p-6 sm:p-8 rounded-3xl neon-border space-y-6">
                     <div class="flex items-center space-x-3">
                         <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-800 to-pink-600 flex items-center justify-center text-white text-xl">
@@ -578,7 +618,6 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Topup & Voucher History -->
                     <div class="glass-panel p-6 rounded-3xl neon-border space-y-4">
                         <h3 class="font-orbitron font-bold text-white text-base flex items-center">
                             <i class="fa-solid fa-file-invoice-dollar mr-2 text-pink-400"></i> Riwayat Saldo Masuk
@@ -588,7 +627,6 @@
                         </div>
                     </div>
 
-                    <!-- Withdrawal History -->
                     <div class="glass-panel p-6 rounded-3xl neon-border space-y-4">
                         <h3 class="font-orbitron font-bold text-white text-base flex items-center">
                             <i class="fa-solid fa-money-bill-transfer mr-2 text-pink-400"></i> Riwayat Penarikan (WD)
@@ -668,7 +706,7 @@
 
     <!-- Application Script -->
     <script>
-        // Application State Data
+        // ====================== STATE ======================
         let state = {
             balance: 0,
             unclaimedBalance: 0,
@@ -685,7 +723,11 @@
             checkinHistory: []
         };
 
-        // Voucher Database (Dynamic/Flexible for codes given by CS)
+        let currentUser = null; // Firebase user object
+        let isSyncing = false;  // cegah race condition saat save/load
+        let authReady = false;
+
+        // Voucher Database (hanya kode yang terdaftar yang valid)
         const voucherDatabase = {
             'TERNAK10K': 10000,
             'SULTAN20K': 20000,
@@ -699,70 +741,331 @@
             'MAXIMUS500': 500000
         };
 
-        // Load state on startup
+        // ====================== INIT ======================
         document.addEventListener("DOMContentLoaded", async () => {
             if (typeof window.firebaseAppInit === 'function') {
                 await window.firebaseAppInit();
             }
-            loadData();
 
-            // Hitung hasil mining berdasarkan waktu yang berlalu, termasuk saat browser ditutup.
-            processMining();
-            updateUI();
-            renderHistoryLists();
-            renderCheckIn();
+            // Setup auth state listener (penting!)
+            if (typeof window.fbOnAuthStateChanged === 'function') {
+                window.fbOnAuthStateChanged(async (user) => {
+                    authReady = true;
+                    if (user) {
+                        currentUser = user;
+                        await onUserLoggedIn(user);
+                    } else {
+                        currentUser = null;
+                        onUserLoggedOut();
+                    }
+                });
+            } else {
+                // Fallback kalau Firebase gagal load
+                authReady = true;
+                loadLocalData();
+                processMining();
+                updateUI();
+                renderHistoryLists();
+                renderCheckIn();
+                updateAuthUI();
+            }
 
-            // Tampilan diperbarui setiap detik. Perhitungan utama memakai timestamp,
-            // jadi tidak bergantung pada setInterval tetap berjalan di background.
+            // Mining interval
             setInterval(() => {
                 processMining();
                 updateUI();
-                saveData();
+                // Save ke cloud hanya jika user login (throttled di dalam saveData)
+                if (currentUser) saveData();
+                else saveLocalData();
             }, 1000);
 
-            // Sinkronkan lagi saat aplikasi kembali aktif.
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) {
                     processMining();
                     updateUI();
-                    saveData();
+                    if (currentUser) saveData();
+                    else saveLocalData();
                 }
             });
             window.addEventListener('pageshow', () => {
                 processMining();
                 updateUI();
-                saveData();
             });
             window.addEventListener('focus', () => {
                 processMining();
                 updateUI();
-                saveData();
             });
-            window.addEventListener('pagehide', saveData);
+            window.addEventListener('pagehide', () => {
+                if (currentUser) saveData(true);
+                else saveLocalData();
+            });
         });
 
-        // Local Storage Management
-        function saveData() {
+        // ====================== AUTH HANDLERS ======================
+        async function onUserLoggedIn(user) {
+            // Update UI dulu
+            updateAuthUI();
+            updateProfileUI(user);
+
+            // Load data dari Firestore
             try {
-                localStorage.setItem('ternak_money_state', JSON.stringify(state));
+                isSyncing = true;
+                showToast("Sinkronisasi data akun...");
+                const cloudData = await window.fbLoadUserData(user.uid);
+
+                if (cloudData && cloudData.balance !== undefined) {
+                    // Ada data di cloud → pakai data cloud
+                    state = {
+                        ...state,
+                        balance: Number(cloudData.balance) || 0,
+                        unclaimedBalance: Number(cloudData.unclaimedBalance) || 0,
+                        dailyRate: Number(cloudData.dailyRate) || 5000,
+                        activePackageName: cloudData.activePackageName || 'Paket Gratis (5rb/hr)',
+                        activePackageDays: cloudData.activePackageDays || 'Selamanya',
+                        topupHistory: Array.isArray(cloudData.topupHistory) ? cloudData.topupHistory : [],
+                        wdHistory: Array.isArray(cloudData.wdHistory) ? cloudData.wdHistory : [],
+                        claimedVouchers: Array.isArray(cloudData.claimedVouchers) ? cloudData.claimedVouchers : [],
+                        miningLastUpdate: Number(cloudData.miningLastUpdate) || Date.now(),
+                        activePackageExpiresAt: cloudData.activePackageExpiresAt || null,
+                        checkinLastDate: cloudData.checkinLastDate || null,
+                        checkinStreak: Number(cloudData.checkinStreak) || 0,
+                        checkinHistory: Array.isArray(cloudData.checkinHistory) ? cloudData.checkinHistory : []
+                    };
+                    showToast(`Selamat datang kembali, ${user.displayName || 'Pengguna'}!`);
+                } else {
+                    // Belum ada data di cloud → buat baru dari state default / local
+                    // (opsional: merge dengan localStorage guest)
+                    const local = loadLocalDataRaw();
+                    if (local && (local.balance > 0 || local.unclaimedBalance > 0)) {
+                        state = { ...state, ...local };
+                    }
+                    await saveData(true); // paksa simpan ke cloud
+                    showToast(`Akun baru dibuat. Selamat datang, ${user.displayName || 'Pengguna'}!`);
+                }
+            } catch (err) {
+                console.error("Gagal load data cloud:", err);
+                showToast("Gagal sinkronisasi data. Menggunakan data lokal.");
+                loadLocalData();
+            } finally {
+                isSyncing = false;
+            }
+
+            processMining();
+            updateUI();
+            renderHistoryLists();
+            renderCheckIn();
+        }
+
+        function onUserLoggedOut() {
+            currentUser = null;
+            // Reset ke data lokal (guest mode)
+            loadLocalData();
+            processMining();
+            updateUI();
+            renderHistoryLists();
+            renderCheckIn();
+            updateAuthUI();
+            updateProfileUI(null);
+            showToast("Anda telah logout. Mode Guest aktif.");
+        }
+
+        async function handleGoogleLogin() {
+            if (currentUser) {
+                showToast("Anda sudah login.");
+                return;
+            }
+
+            const btn = document.getElementById('btn-login-desktop');
+            if (btn) btn.classList.add('auth-loading');
+
+            try {
+                if (typeof window.fbSignInGoogle !== 'function') {
+                    throw new Error('Firebase belum siap. Muat ulang halaman.');
+                }
+                await window.fbSignInGoogle();
+                // onAuthStateChanged akan handle sisanya
+            } catch (e) {
+                console.error('Google login error:', e);
+                let message = e.message || 'Silakan coba lagi.';
+                if (e.code === 'auth/unauthorized-domain') message = 'Domain website belum terdaftar di Authorized domains Firebase.';
+                else if (e.code === 'auth/popup-blocked') message = 'Popup diblokir browser. Izinkan popup lalu coba lagi.';
+                else if (e.code === 'auth/popup-closed-by-user') message = 'Jendela login ditutup sebelum selesai.';
+                else if (e.code === 'auth/operation-not-allowed') message = 'Provider Google belum aktif di Firebase Authentication.';
+                showToast('Login Google gagal: ' + message);
+            } finally {
+                if (btn) btn.classList.remove('auth-loading');
+            }
+        }
+
+        async function handleLogout() {
+            try {
+                // Simpan dulu sebelum logout
+                if (currentUser) await saveData(true);
+                if (typeof window.fbSignOut === 'function') {
+                    await window.fbSignOut();
+                }
+                // onAuthStateChanged akan handle sisanya
+            } catch (e) {
+                console.error("Logout error:", e);
+                showToast("Gagal logout: " + (e.message || "Unknown error"));
+            }
+        }
+
+        // ====================== UI AUTH ======================
+        function updateAuthUI() {
+            const container = document.getElementById('auth-container');
+            const mobileAuth = document.getElementById('mobile-auth-btn');
+            const profilLogout = document.getElementById('profil-logout-area');
+
+            if (currentUser) {
+                // Desktop
+                if (container) {
+                    container.innerHTML = `
+                        <div class="hidden sm:flex items-center space-x-2">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center text-xs font-bold overflow-hidden">
+                                ${currentUser.photoURL ? `<img src="${currentUser.photoURL}" class="w-full h-full object-cover">` : (currentUser.displayName || 'G').substring(0, 1).toUpperCase()}
+                            </div>
+                            <span class="text-xs font-semibold text-purple-200 max-w-[100px] truncate">${currentUser.displayName || 'User'}</span>
+                            <button onclick="handleLogout()" class="px-3 py-1.5 rounded-lg text-xs font-bold text-red-300 bg-red-900/40 hover:bg-red-900/60 border border-red-700/40 transition">
+                                Logout
+                            </button>
+                        </div>
+                    `;
+                }
+                // Mobile
+                if (mobileAuth) {
+                    mobileAuth.innerHTML = `
+                        <div class="space-y-2">
+                            <p class="text-xs text-purple-300 px-1">Login sebagai: <strong class="text-white">${currentUser.displayName || currentUser.email}</strong></p>
+                            <button onclick="handleLogout(); closeMobileMenu();" class="w-full py-2.5 rounded-xl text-xs font-bold text-red-200 bg-red-900/40 hover:bg-red-900/60 border border-red-700/40 transition">
+                                <i class="fa-solid fa-right-from-bracket mr-2"></i> Logout
+                            </button>
+                        </div>
+                    `;
+                }
+                if (profilLogout) profilLogout.classList.remove('hidden');
+            } else {
+                // Desktop
+                if (container) {
+                    container.innerHTML = `
+                        <button onclick="handleGoogleLogin()" id="btn-login-desktop" class="hidden sm:inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-lg">
+                            <i class="fa-brands fa-google mr-2"></i> Login Google
+                        </button>
+                    `;
+                }
+                // Mobile
+                if (mobileAuth) {
+                    mobileAuth.innerHTML = `
+                        <button onclick="handleGoogleLogin(); closeMobileMenu();" class="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition">
+                            <i class="fa-brands fa-google mr-2"></i> Login Google / Sinkronisasi
+                        </button>
+                    `;
+                }
+                if (profilLogout) profilLogout.classList.add('hidden');
+            }
+        }
+
+        function updateProfileUI(user) {
+            const nameEl = document.getElementById('user-display-name');
+            const emailEl = document.getElementById('user-email-display');
+            const initialsEl = document.getElementById('user-initials');
+            const photoEl = document.getElementById('user-photo');
+            const idEl = document.getElementById('user-id-display');
+            const statusEl = document.getElementById('account-status');
+
+            if (user) {
+                if (nameEl) nameEl.innerText = user.displayName || 'Google User';
+                if (emailEl) emailEl.innerText = user.email || user.uid;
+                if (idEl) idEl.innerText = 'TM-' + user.uid.substring(0, 8).toUpperCase();
+                if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-check-circle mr-1"></i> Login Google';
+                
+                if (user.photoURL && photoEl) {
+                    photoEl.src = user.photoURL;
+                    photoEl.classList.remove('hidden');
+                    if (initialsEl) initialsEl.classList.add('hidden');
+                } else {
+                    if (photoEl) photoEl.classList.add('hidden');
+                    if (initialsEl) {
+                        initialsEl.classList.remove('hidden');
+                        initialsEl.innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
+                    }
+                }
+            } else {
+                if (nameEl) nameEl.innerText = 'Guest User';
+                if (emailEl) emailEl.innerText = 'Belum login Google / Menggunakan Sesi Lokal';
+                if (idEl) idEl.innerText = 'TM-GUEST';
+                if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-user mr-1"></i> Mode Guest';
+                if (photoEl) photoEl.classList.add('hidden');
+                if (initialsEl) {
+                    initialsEl.classList.remove('hidden');
+                    initialsEl.innerText = 'TM';
+                }
+            }
+        }
+
+        // ====================== DATA PERSISTENCE ======================
+        function getStateForSave() {
+            return {
+                balance: state.balance,
+                unclaimedBalance: state.unclaimedBalance,
+                dailyRate: state.dailyRate,
+                activePackageName: state.activePackageName,
+                activePackageDays: state.activePackageDays,
+                topupHistory: state.topupHistory.slice(0, 50), // batasi ukuran
+                wdHistory: state.wdHistory.slice(0, 50),
+                claimedVouchers: state.claimedVouchers,
+                miningLastUpdate: state.miningLastUpdate,
+                activePackageExpiresAt: state.activePackageExpiresAt,
+                checkinLastDate: state.checkinLastDate,
+                checkinStreak: state.checkinStreak,
+                checkinHistory: state.checkinHistory.slice(0, 30)
+            };
+        }
+
+        let lastSaveTime = 0;
+        async function saveData(force = false) {
+            // Local cache selalu disimpan
+            saveLocalData();
+
+            if (!currentUser || isSyncing) return;
+
+            // Throttle: jangan save ke Firestore lebih dari 1x per 5 detik (kecuali force)
+            const now = Date.now();
+            if (!force && (now - lastSaveTime < 5000)) return;
+            lastSaveTime = now;
+
+            try {
+                await window.fbSaveUserData(currentUser.uid, getStateForSave());
+            } catch (err) {
+                console.error("Gagal save ke Firestore:", err);
+                // Tidak show toast supaya tidak mengganggu user
+            }
+        }
+
+        function saveLocalData() {
+            try {
+                localStorage.setItem('ternak_money_state', JSON.stringify(getStateForSave()));
             } catch (e) {
                 console.error("Storage error:", e);
             }
         }
 
-        function loadData() {
+        function loadLocalDataRaw() {
             try {
                 const saved = localStorage.getItem('ternak_money_state');
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    state = { ...state, ...parsed };
-                }
-            } catch (e) {
-                console.error("Load storage error:", e);
+                if (saved) return JSON.parse(saved);
+            } catch (e) {}
+            return null;
+        }
+
+        function loadLocalData() {
+            const parsed = loadLocalDataRaw();
+            if (parsed) {
+                state = { ...state, ...parsed };
             }
         }
 
-        // Akumulasi berbasis waktu: tetap menghitung selisih waktu saat halaman ditutup.
+        // ====================== MINING LOGIC ======================
         function processMining() {
             const now = Date.now();
             let last = Number(state.miningLastUpdate);
@@ -772,7 +1075,6 @@
                 return;
             }
 
-            // Jika paket aktif, hitung tarif paket sampai masa aktif habis.
             const expiry = Number(state.activePackageExpiresAt);
             if (Number.isFinite(expiry) && expiry > last) {
                 const packageEnd = Math.min(now, expiry);
@@ -803,25 +1105,21 @@
             if (balanceEl) balanceEl.innerText = formatRupiah(Math.floor(state.unclaimedBalance));
         }
 
-        // Format Rupiah helper
         function formatRupiah(amount) {
             return 'Rp ' + Math.floor(amount).toLocaleString('id-ID');
         }
 
-        // Update User Interface
         function updateUI() {
             document.getElementById('main-balance').innerText = formatRupiah(state.balance);
             const withdrawBalanceInfo = document.getElementById('withdraw-balance-info');
             if (withdrawBalanceInfo) withdrawBalanceInfo.innerText = 'Saldo tersedia: ' + formatRupiah(state.balance);
-            const withdrawAmountInput = document.getElementById('withdraw-amount');
-            if (withdrawAmountInput) withdrawAmountInput.max = Math.floor(state.balance);
             document.getElementById('mining-rate-display').innerText = '+ ' + formatRupiah(state.dailyRate) + ' / Hari';
             document.getElementById('active-package-name').innerText = state.activePackageName;
             document.getElementById('active-package-days').innerText = state.activePackageDays;
             renderCheckIn();
         }
 
-        // DAILY CHECK-IN: bonus tetap Rp1.000 per hari, maksimal satu kali per tanggal lokal.
+        // ====================== CHECK-IN ======================
         const DAILY_CHECKIN_REWARD = 1000;
 
         function getLocalDateKey(date = new Date()) {
@@ -847,8 +1145,6 @@
             const lastDate = state.checkinLastDate;
             let streak = Number(state.checkinStreak || 0);
 
-            // Jika hari ini belum check-in dan hari terakhir bukan kemarin,
-            // streak lama sudah terputus.
             if (lastDate && lastDate !== today && lastDate !== yesterday) {
                 streak = 0;
                 state.checkinStreak = 0;
@@ -938,12 +1234,12 @@
             });
 
             showToast(`Check-in berhasil! Bonus ${formatRupiah(DAILY_CHECKIN_REWARD)} masuk ke saldo utama.`);
-            saveData();
+            saveData(true);
             updateUI();
             renderHistoryLists();
         }
 
-        // Tab Navigation
+        // ====================== NAVIGATION ======================
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -963,15 +1259,14 @@
         }
 
         function openMobileMenu() {
-            const menu = document.getElementById('mobile-menu');
-            menu.classList.toggle('hidden');
+            document.getElementById('mobile-menu').classList.toggle('hidden');
         }
 
         function closeMobileMenu() {
             document.getElementById('mobile-menu').classList.add('hidden');
         }
 
-        // Toast Notification System
+        // ====================== TOAST & MODAL ======================
         function showToast(message) {
             const toast = document.getElementById('toast');
             document.getElementById('toast-message').innerText = message;
@@ -981,7 +1276,6 @@
             }, 3500);
         }
 
-        // Custom Modal Controller
         let modalConfirmCallback = null;
         function showModal(title, desc, onConfirm) {
             document.getElementById('modal-title').innerText = title;
@@ -1002,7 +1296,7 @@
             closeModal();
         });
 
-        // Claim Mining Earnings
+        // ====================== CORE ACTIONS ======================
         function claimMining() {
             processMining();
             const claimable = Math.floor(state.unclaimedBalance);
@@ -1013,11 +1307,10 @@
             state.balance += claimable;
             state.unclaimedBalance = 0;
             showToast(`Berhasil mengklaim ${formatRupiah(claimable)} ke saldo utama!`);
-            saveData();
+            saveData(true);
             updateUI();
         }
 
-        // Buy Package Logic
         function buyPackage(packageName, price, dailyReturn, durationDays) {
             if (state.balance < price) {
                 showToast(`Saldo Anda tidak mencukupi! Saldo Anda ${formatRupiah(state.balance)}, butuh ${formatRupiah(price)}. Silakan klaim voucher atau top-up.`);
@@ -1030,7 +1323,7 @@
                 () => {
                     processMining();
                     state.balance -= price;
-                    state.dailyRate = 5000 + dailyReturn; // Tarif sesuai logika asli aplikasi
+                    state.dailyRate = 5000 + dailyReturn;
                     state.activePackageName = packageName;
                     state.activePackageExpiresAt = Date.now() + (durationDays * 86400000);
                     state.activePackageDays = durationDays + ' Hari Lagi';
@@ -1045,14 +1338,13 @@
                     });
 
                     showToast(`Selamat! ${packageName} berhasil diaktifkan.`);
-                    saveData();
+                    saveData(true);
                     updateUI();
                     renderHistoryLists();
                 }
             );
         }
 
-        // Voucher Claiming
         function claimVoucher() {
             const input = document.getElementById('voucher-input');
             const code = input.value.trim().toUpperCase();
@@ -1066,11 +1358,11 @@
                 return;
             }
 
-            // Check if code exists in database or generate dynamic default value if custom code created by admin
-            let amount = voucherDatabase[code];
+            // Hanya kode yang ada di database yang valid (lebih aman)
+            const amount = voucherDatabase[code];
             if (!amount) {
-                // If user types any custom code provided by CS, default to 50,000 or derive from code structure if needed
-                amount = 50000; 
+                showToast("Kode voucher tidak valid atau sudah kadaluarsa.");
+                return;
             }
 
             state.balance += amount;
@@ -1086,12 +1378,11 @@
 
             showToast(`Berhasil klaim voucher ${code}! Saldo bertambah ${formatRupiah(amount)}.`);
             input.value = '';
-            saveData();
+            saveData(true);
             updateUI();
             renderHistoryLists();
         }
 
-        // Withdrawal Logic: user enters the amount; only that amount is deducted.
         function withdrawSaldo() {
             const amountInput = document.getElementById('withdraw-amount');
             const requestedAmount = Number((amountInput ? amountInput.value : "").trim());
@@ -1112,13 +1403,17 @@
                 return;
             }
 
+            // Sarankan login dulu untuk WD (opsional, tapi lebih baik)
+            if (!currentUser) {
+                showToast("Disarankan Login Google dulu supaya riwayat WD tersimpan di akun Anda.");
+            }
+
             const randomWdCode = 'WD-' + Math.floor(100000 + Math.random() * 900000);
 
             showModal(
                 "Konfirmasi Penarikan Saldo (WD)",
                 `Ajukan penarikan sebesar ${formatRupiah(requestedAmount)}?\n\nKode WD Anda: ${randomWdCode}\nSisa saldo setelah pengajuan: ${formatRupiah(state.balance - requestedAmount)}.`,
                 () => {
-                    // Recheck balance when the user confirms the modal.
                     if (requestedAmount > state.balance) {
                         showToast("Saldo tidak mencukupi. Silakan ulangi pengajuan.");
                         return;
@@ -1134,14 +1429,13 @@
 
                     showToast(`Pengajuan WD ${formatRupiah(requestedAmount)} (${randomWdCode}) berhasil!`);
                     if (amountInput) amountInput.value = '';
-                    saveData();
+                    saveData(true);
                     updateUI();
                     renderHistoryLists();
                 }
             );
         }
 
-        // Render History Lists
         function renderHistoryLists() {
             const topupContainer = document.getElementById('topup-history-list');
             const wdContainer = document.getElementById('wd-history-list');
@@ -1179,48 +1473,21 @@
             }
         }
 
-        // Login Google menggunakan Firebase Authentication
-        async function handleGoogleLogin() {
-            if (window.fbAuth && window.fbAuth.currentUser && window.fbAuth.currentUser.email) {
-                const user = window.fbAuth.currentUser;
-                document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
-                document.getElementById('user-email-display').innerText = user.email || user.uid;
-                document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
-                showToast("Anda sudah login dengan Google.");
-                return;
-            }
-
-            try {
-                if (typeof window.fbSignInGoogle !== 'function') {
-                    throw new Error('Firebase belum siap. Muat ulang halaman dan coba lagi.');
-                }
-                const user = await window.fbSignInGoogle();
-                document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
-                document.getElementById('user-email-display').innerText = user.email || user.uid;
-                document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
-                showToast(`Login Google berhasil. Selamat datang, ${user.displayName || 'Pengguna'}!`);
-            } catch (e) {
-                console.error('Google login error:', e);
-                let message = e.message || 'Silakan coba lagi.';
-                if (e.code === 'auth/unauthorized-domain') message = 'Domain website belum terdaftar di Authorized domains Firebase.';
-                else if (e.code === 'auth/popup-blocked') message = 'Popup diblokir browser. Izinkan popup untuk website ini lalu coba lagi.';
-                else if (e.code === 'auth/popup-closed-by-user') message = 'Jendela login ditutup sebelum selesai.';
-                else if (e.code === 'auth/operation-not-allowed') message = 'Provider Google belum aktif di Firebase Authentication.';
-                showToast('Login Google gagal: ' + message);
-            }
-        }
-
-        // Copy CS Number helper
         function copyCSNumber() {
             const num = "083136392786";
-            const tempInput = document.createElement("input");
-            tempInput.value = num;
-            document.body.appendChild(tempInput);
-            tempInput.select();
-            document.execCommand("copy");
-            document.body.removeChild(tempInput);
-            showToast("Nomor CS 083136392786 berhasil disalin ke clipboard!");
+            navigator.clipboard.writeText(num).then(() => {
+                showToast("Nomor CS 083136392786 berhasil disalin!");
+            }).catch(() => {
+                // Fallback
+                const tempInput = document.createElement("input");
+                tempInput.value = num;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+                showToast("Nomor CS 083136392786 berhasil disalin!");
+            });
         }
     </script>
 </body>
-                            </html>
+</html>
