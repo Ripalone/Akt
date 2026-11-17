@@ -25,34 +25,38 @@
     <!-- Google Fonts & FontAwesome -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase SDK (Modular v11) -->
+    <!-- Firebase Authentication (Google Sign-In) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // Expose Firebase tools globally
-        window.firebaseAppInit = async () => {
-            try {
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'ternak-money-default';
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "demo", projectId: "demo" };
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                const db = getFirestore(app);
-                
-                window.fbAuth = auth;
-                window.fbDb = db;
-                window.fbAppId = appId;
-
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.log("Firebase fallback mode active:", e);
-            }
+        // Konfigurasi dari project Firebase Ternak Moneyy
+        const firebaseConfig = {
+            apiKey: "AIzaSyBACYl1Qm-jHAM0Y-BJlixAN2wkwE6MTxs",
+            authDomain: "ternak-moneyy.firebaseapp.com",
+            projectId: "ternak-moneyy",
+            storageBucket: "ternak-moneyy.firebasestorage.app",
+            messagingSenderId: "193854956170",
+            appId: "1:193854956170:web:4ef11e24ea8d1199384373",
+            measurementId: "G-RJ4F2MLQXE"
         };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            window.fbAuth = auth;
+            window.firebaseAppInit = async () => true;
+            window.fbSignInGoogle = async () => {
+                const provider = new GoogleAuthProvider();
+                provider.setCustomParameters({ prompt: "select_account" });
+                const result = await signInWithPopup(auth, provider);
+                return result.user;
+            };
+        } catch (error) {
+            console.error("Firebase initialization error:", error);
+            window.firebaseInitError = error;
+            window.firebaseAppInit = async () => false;
+        }
     </script>
     <style>
         body {
@@ -1175,28 +1179,34 @@
             }
         }
 
-        // Google Authentication simulation / integration
+        // Login Google menggunakan Firebase Authentication
         async function handleGoogleLogin() {
-            if (window.fbAuth && window.fbAuth.currentUser) {
+            if (window.fbAuth && window.fbAuth.currentUser && window.fbAuth.currentUser.email) {
                 const user = window.fbAuth.currentUser;
                 document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
                 document.getElementById('user-email-display').innerText = user.email || user.uid;
                 document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
-                showToast("Akun Anda telah disinkronkan dengan Google!");
+                showToast("Anda sudah login dengan Google.");
                 return;
             }
 
             try {
-                const provider = new GoogleAuthProvider();
-                const result = await signInWithPopup(window.fbAuth, provider);
-                const user = result.user;
+                if (typeof window.fbSignInGoogle !== 'function') {
+                    throw new Error('Firebase belum siap. Muat ulang halaman dan coba lagi.');
+                }
+                const user = await window.fbSignInGoogle();
                 document.getElementById('user-display-name').innerText = user.displayName || 'Google User';
-                document.getElementById('user-email-display').innerText = user.email;
+                document.getElementById('user-email-display').innerText = user.email || user.uid;
                 document.getElementById('user-initials').innerText = (user.displayName || 'G').substring(0, 2).toUpperCase();
-                showToast(`Login Google Berhasil: Selamat datang, ${user.displayName}!`);
+                showToast(`Login Google berhasil. Selamat datang, ${user.displayName || 'Pengguna'}!`);
             } catch (e) {
-                console.log("Popup login notice:", e);
-                showToast("Sesi lokal aktif. Progres Anda tersimpan aman di perangkat ini.");
+                console.error('Google login error:', e);
+                let message = e.message || 'Silakan coba lagi.';
+                if (e.code === 'auth/unauthorized-domain') message = 'Domain website belum terdaftar di Authorized domains Firebase.';
+                else if (e.code === 'auth/popup-blocked') message = 'Popup diblokir browser. Izinkan popup untuk website ini lalu coba lagi.';
+                else if (e.code === 'auth/popup-closed-by-user') message = 'Jendela login ditutup sebelum selesai.';
+                else if (e.code === 'auth/operation-not-allowed') message = 'Provider Google belum aktif di Firebase Authentication.';
+                showToast('Login Google gagal: ' + message);
             }
         }
 
