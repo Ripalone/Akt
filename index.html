@@ -29,7 +29,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where, updateDoc, deleteField, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Konfigurasi dari project Firebase Ternak Moneyy
         const firebaseConfig = {
@@ -150,6 +150,46 @@
                 return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
             };
             window.fbUpdateTokenTopup = async (id, data) => updateDoc(doc(db, "tokenTopups", id), data);
+            window.fbCreateTokenWithdrawal = async (request) => {
+                if (!auth.currentUser) throw new Error("Harus login");
+                const ref = doc(collection(db, "tokenWithdrawals"));
+                await setDoc(ref, { ...request, uid: auth.currentUser.uid, email: auth.currentUser.email || '', displayName: auth.currentUser.displayName || 'Pengguna', createdAt: Date.now() });
+                return ref.id;
+            };
+            window.fbListTokenWithdrawals = async () => {
+                if (!auth.currentUser) throw new Error("Harus login");
+                const ref = collection(db, "tokenWithdrawals");
+                const isAdmin = String(auth.currentUser.email || '').toLowerCase() === 'ripalwhwiwiw@gmail.com';
+                const snap = isAdmin ? await getDocs(ref) : await getDocs(query(ref, where("uid", "==", auth.currentUser.uid)));
+                return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
+            };
+            window.fbUpdateTokenWithdrawal = async (id, data) => updateDoc(doc(db, "tokenWithdrawals", id), data);
+
+            // Live chat: nama publik berupa alias, bukan nama/email Google.
+            window.fbSendLiveChat = async (text, alias, recipientUid = null) => {
+                if (!auth.currentUser) throw new Error("Harus login");
+                const payload = {
+                    uid: recipientUid || auth.currentUser.uid,
+                    senderUid: auth.currentUser.uid,
+                    senderRole: recipientUid ? "admin" : "user",
+                    alias: recipientUid ? "Admin Support" : alias,
+                    message: String(text || "").trim().slice(0, 1000),
+                    createdAt: Date.now()
+                };
+                if (!payload.message) throw new Error("Pesan kosong");
+                const ref = await addDoc(collection(db, "liveChatMessages"), payload);
+                return ref.id;
+            };
+            window.fbListMyLiveChat = async () => {
+                if (!auth.currentUser) throw new Error("Harus login");
+                const snap = await getDocs(query(collection(db, "liveChatMessages"), where("uid", "==", auth.currentUser.uid)));
+                return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+            };
+            window.fbListAllLiveChat = async () => {
+                if (!auth.currentUser || String(auth.currentUser.email||"").toLowerCase() !== "ripalwhwiwiw@gmail.com") throw new Error("Akses admin ditolak");
+                const snap = await getDocs(collection(db, "liveChatMessages"));
+                return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.createdAt||0)-(b.createdAt||0));
+            };
             window.fbSetNextSpinPrize = async (uid, prize) => setDoc(doc(db, "users", uid), { nextSpinPrize: Number(prize) }, { merge: true });
             window.fbClearNextSpinPrize = async (uid) => updateDoc(doc(db, "users", uid), { nextSpinPrize: deleteField() });
 
@@ -725,6 +765,20 @@
             <div class="mx-auto max-w-xs rounded-full border-4 border-pink-500/60 p-8 bg-gradient-to-br from-purple-950 to-pink-950"><i class="fa-solid fa-gift text-6xl text-yellow-300"></i><p id="wheel-result" class="font-orbitron text-xl font-bold text-white mt-4">Siap Spin?</p></div>
             <button id="spin-button" onclick="spinLuckyWheel()" class="w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-white neon-btn"><i class="fa-solid fa-rotate mr-2"></i>SPIN SEKARANG</button>
             <p class="text-xs text-purple-400">Hadiah acak 1.000–10.000 token $. Minimum penarikan 20.000 token $. Hadiah dapat berubah sesuai ketentuan promo.</p>
+            <div class="p-5 rounded-2xl bg-purple-950/40 border border-emerald-800/60 text-left space-y-3">
+              <h3 class="font-orbitron font-bold text-white">Penarikan Token $</h3>
+              <p class="text-xs text-purple-300">Minimal penarikan 20.000 token $. Saldo token akan dikurangi saat pengajuan dibuat. Jika ditolak admin, saldo dikembalikan.</p>
+              <label class="block text-xs text-purple-200" for="token-wd-amount">Jumlah token yang ditarik</label>
+              <input id="token-wd-amount" type="number" min="20000" step="1000" placeholder="Minimal 20000" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white">
+              <label class="block text-xs text-purple-200" for="token-wd-method">Metode penerimaan</label>
+              <select id="token-wd-method" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white"><option value="DANA">DANA</option><option value="OVO">OVO</option><option value="GoPay">GoPay</option><option value="Transfer Bank">Transfer Bank</option></select>
+              <label class="block text-xs text-purple-200" for="token-wd-account">Nomor rekening / nomor e-wallet</label>
+              <input id="token-wd-account" type="text" maxlength="40" placeholder="Masukkan nomor tujuan" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white">
+              <label class="block text-xs text-purple-200" for="token-wd-name">Nama pemilik rekening / akun</label>
+              <input id="token-wd-name" type="text" maxlength="60" placeholder="Nama sesuai akun" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white">
+              <button onclick="requestTokenWithdrawal()" class="w-full py-3 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold">Ajukan Penarikan Token $</button>
+              <div id="my-token-withdrawals" class="space-y-2 text-xs text-purple-200">Login untuk melihat riwayat penarikan token.</div>
+            </div>
             <button onclick="switchTab('topup-token')" class="w-full py-3 rounded-xl border border-purple-700 text-purple-200">Top Up Token $</button>
           </div>
         </section>
@@ -745,35 +799,22 @@
           </div>
         </section>
 
-        <!-- TAB: CUSTOMER SERVICE -->
-        <section id="tab-cs" class="tab-content hidden space-y-8">
-            <div class="max-w-2xl mx-auto glass-panel p-8 rounded-3xl neon-border text-center space-y-6">
-                <div class="w-20 h-20 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 mx-auto flex items-center justify-center text-white text-3xl shadow-xl">
-                    <i class="fa-brands fa-whatsapp"></i>
-                </div>
-                <div class="space-y-2">
-                    <h1 class="font-orbitron text-2xl sm:text-3xl font-extrabold text-white">Customer Service 24/7</h1>
-                    <p class="text-sm text-purple-200">
-                        Butuh bantuan seputar top-up, konfirmasi bukti transfer, atau kendala penarikan saldo? Hubungi tim support kami melalui WhatsApp resmi.
-                    </p>
-                </div>
+        <!-- TAB: LIVE CHAT (alias menyamarkan nama asli) -->
+        <section id="tab-cs" class="tab-content hidden space-y-6">
+          <div class="max-w-3xl mx-auto glass-panel p-6 rounded-3xl neon-border space-y-4">
+            <div class="text-center"><h1 class="font-orbitron text-2xl font-bold text-white">Pusat Bantuan</h1><p class="text-xs text-purple-300 mt-2">Kirim pesan langsung ke admin. Nama Anda ditampilkan sebagai alias anonim.</p></div>
+            <div class="rounded-xl bg-black/30 border border-purple-800 p-3"><p class="text-xs text-purple-300">Nama chat Anda</p><p id="live-chat-alias" class="font-bold text-emerald-300">Member-••••</p></div>
+            <div id="live-chat-messages" class="h-80 overflow-y-auto space-y-3 p-3 rounded-xl bg-black/30 border border-purple-900"><p class="text-sm text-purple-400 text-center">Login Google untuk memulai percakapan.</p></div>
+            <div class="flex gap-2"><input id="live-chat-input" maxlength="1000" placeholder="Tulis pesan ke admin..." class="min-w-0 flex-1 p-3 rounded-xl bg-slate-900 border border-purple-700 text-white"><button onclick="sendLiveChat()" class="px-5 rounded-xl neon-btn text-white font-bold"><i class="fa-solid fa-paper-plane"></i></button></div>
+            <p class="text-[11px] text-purple-400">Jangan kirim password, kode OTP, atau data rahasia.</p>
+          </div>
+        </section>
 
-                <div class="p-4 rounded-2xl bg-purple-950/60 border border-purple-800/60 inline-block">
-                    <span class="text-xs text-purple-400 uppercase tracking-widest block font-medium">Nomor WhatsApp Resmi</span>
-                    <span class="font-orbitron text-2xl sm:text-3xl font-bold text-white tracking-wider mt-1 block">0831-3639-2786</span>
-                </div>
-
-                <div class="pt-4 flex flex-col sm:flex-row justify-center gap-4">
-                    <a href="https://wa.me/6283136392786?text=Halo%20Admin%20Ternak%20Money,%20saya%20ingin%20konfirmasi%20top-up/penarikan%20saldo." target="_blank" rel="noopener noreferrer" class="px-8 py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-xl flex items-center justify-center space-x-3 transition">
-                        <i class="fa-brands fa-whatsapp text-xl"></i>
-                        <span>Chat WhatsApp Sekarang</span>
-                    </a>
-                    <button onclick="copyCSNumber()" class="px-6 py-4 rounded-2xl font-bold text-purple-200 bg-purple-900/40 hover:bg-purple-900/60 border border-purple-700/50 transition flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-copy"></i>
-                        <span>Salin Nomor</span>
-                    </button>
-                </div>
-            </div>
+        <section id="tab-admin-chat" class="tab-content hidden space-y-5">
+          <div class="max-w-5xl mx-auto glass-panel p-6 rounded-3xl neon-border">
+            <div class="flex items-center justify-between gap-3"><div><h2 class="font-orbitron text-xl font-bold text-white">Inbox Live Chat</h2><p class="text-xs text-purple-300">Pesan pengguna dengan nama alias.</p></div><button onclick="loadAdminLiveChat()" class="px-3 py-2 rounded-xl bg-purple-700 text-white text-xs font-bold">Muat ulang</button></div>
+            <div id="admin-live-chat-list" class="mt-4 space-y-4"><p class="text-sm text-purple-400">Khusus admin.</p></div>
+          </div>
         </section>
 
         <!-- TAB: UNDANG TEMAN -->
@@ -800,6 +841,7 @@
             <h2 class="font-orbitron text-xl font-bold text-white">Admin Token & Top Up</h2>
             <div class="p-4 rounded-xl bg-black/30 border border-purple-800 space-y-3"><h3 class="font-bold text-white">Atur hadiah spin berikutnya</h3><input id="admin-spin-uid" placeholder="UID pengguna" class="w-full p-3 rounded-xl bg-black/40 border border-purple-700 text-white"><input id="admin-spin-prize" type="number" min="1000" max="10000" placeholder="Hadiah token (1.000–10.000)" class="w-full p-3 rounded-xl bg-black/40 border border-purple-700 text-white"><button onclick="adminSetSpinPrize()" class="px-5 py-3 rounded-xl neon-btn text-white font-bold">Simpan Hadiah Sekali Spin</button><p class="text-xs text-purple-400">Hadiah khusus akan dipakai pada spin berikutnya lalu dihapus.</p></div>
             <div><div class="flex justify-between items-center"><h3 class="font-bold text-white">Pesanan top up</h3><button onclick="loadAdminTokenTopups()" class="text-sm text-pink-300">Muat ulang</button></div><div id="admin-token-topup-list" class="space-y-3 mt-3">Belum dimuat.</div></div>
+            <div><div class="flex justify-between items-center"><h3 class="font-bold text-white">Pengajuan penarikan Token $</h3><button onclick="loadAdminTokenWithdrawals()" class="text-sm text-pink-300">Muat ulang</button></div><div id="admin-token-withdrawal-list" class="space-y-3 mt-3">Belum dimuat.</div></div>
           </div>
         </section>
 
@@ -909,6 +951,14 @@
                 updateAuthUI();
             }
 
+            // Sinkronisasi chat berkala agar pesan masuk dan balasan tampil otomatis.
+            setInterval(() => {
+                const chatTab = document.getElementById('tab-cs');
+                const adminChatTab = document.getElementById('tab-admin-chat');
+                if (currentUser && chatTab && !chatTab.classList.contains('hidden')) loadMyLiveChat();
+                if (isAdmin() && adminChatTab && !adminChatTab.classList.contains('hidden')) loadAdminLiveChat();
+            }, 5000);
+
             // Mining interval
             setInterval(() => {
                 processMining();
@@ -1000,6 +1050,7 @@
                         checkinHistory: Array.isArray(cloudData.checkinHistory) ? cloudData.checkinHistory : []
                     };
                     showToast(`Selamat datang kembali, ${user.displayName || 'Pengguna'}!`);
+                    setTimeout(loadMyTokenWithdrawals, 300);
                 } else {
                     // Belum ada data di cloud → buat baru dari state default / local
                     // (opsional: merge dengan localStorage guest)
@@ -1426,10 +1477,10 @@
             if (isAdmin()) {
                 if (!desktop) {
                     const nav = document.querySelector('header nav');
-                    if (nav) { const b = document.createElement('button'); b.id='nav-admin'; b.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-2"></i>Admin'; b.onclick=()=>switchTab('admin'); nav.appendChild(b); const t=document.createElement('button'); t.id='nav-admin-token'; t.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; t.innerHTML='<i class=\"fa-solid fa-coins mr-2\"></i>Token Admin'; t.onclick=()=>switchTab('admin-token'); nav.appendChild(t); }
+                    if (nav) { const b = document.createElement('button'); b.id='nav-admin'; b.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-2"></i>Admin'; b.onclick=()=>switchTab('admin'); nav.appendChild(b); const t=document.createElement('button'); t.id='nav-admin-token'; t.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; t.innerHTML='<i class=\"fa-solid fa-coins mr-2\"></i>Token Admin'; t.onclick=()=>switchTab('admin-token'); nav.appendChild(t); const c=document.createElement('button'); c.id='nav-admin-chat'; c.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; c.innerHTML='<i class=\"fa-solid fa-comments mr-2\"></i>Inbox Chat'; c.onclick=()=>switchTab('admin-chat'); nav.appendChild(c); }
                 }
-                if (!mobile) { const menu=document.getElementById('mobile-menu'); if(menu){ const b=document.createElement('button'); b.id='mobile-admin-nav'; b.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-3"></i>Admin Referral'; b.onclick=()=>{switchTab('admin');closeMobileMenu();}; menu.appendChild(b); const t=document.createElement('button'); t.id='mobile-admin-token'; t.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; t.innerHTML='Admin Token & Top Up'; t.onclick=()=>{switchTab('admin-token');closeMobileMenu();}; menu.appendChild(t); } }
-            } else { if(desktop) desktop.remove(); if(mobile) mobile.remove(); const at=document.getElementById('nav-admin-token'); if(at) at.remove(); const mt=document.getElementById('mobile-admin-token'); if(mt) mt.remove(); }
+                if (!mobile) { const menu=document.getElementById('mobile-menu'); if(menu){ const b=document.createElement('button'); b.id='mobile-admin-nav'; b.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-3"></i>Admin Referral'; b.onclick=()=>{switchTab('admin');closeMobileMenu();}; menu.appendChild(b); const t=document.createElement('button'); t.id='mobile-admin-token'; t.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; t.innerHTML='Admin Token & Top Up'; t.onclick=()=>{switchTab('admin-token');closeMobileMenu();}; menu.appendChild(t); const c=document.createElement('button'); c.id='mobile-admin-chat'; c.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; c.innerHTML='Inbox Live Chat'; c.onclick=()=>{switchTab('admin-chat');closeMobileMenu();}; menu.appendChild(c); } }
+            } else { if(desktop) desktop.remove(); if(mobile) mobile.remove(); const at=document.getElementById('nav-admin-token'); if(at) at.remove(); const mt=document.getElementById('mobile-admin-token'); if(mt) mt.remove(); const ac=document.getElementById('nav-admin-chat'); if(ac) ac.remove(); const mac=document.getElementById('mobile-admin-chat'); if(mac) mac.remove(); }
         }
         function renderReferralUI() {
             const codeEl=document.getElementById('my-referral-code');
@@ -1546,6 +1597,57 @@
             try { await window.fbUpdateTokenTopup(id,{status:'ditolak',rejectedAt:Date.now(),rejectedBy:currentUser.email}); await loadAdminTokenTopups(); showToast('Pesanan ditolak.'); }
             catch(e){showToast('Gagal mengubah status. Periksa Firestore Rules.');}
         }
+        async function requestTokenWithdrawal() {
+            if (!currentUser) return showToast('Login Google dulu untuk mengajukan penarikan token.');
+            const amount = Number(document.getElementById('token-wd-amount').value);
+            const method = document.getElementById('token-wd-method').value;
+            const account = document.getElementById('token-wd-account').value.trim();
+            const accountName = document.getElementById('token-wd-name').value.trim();
+            if (!Number.isSafeInteger(amount) || amount < 20000) return showToast('Minimal penarikan adalah 20.000 token $.');
+            if (amount > Number(state.tokenBalance || 0)) return showToast('Saldo token $ tidak mencukupi.');
+            if (!account || !accountName) return showToast('Lengkapi nomor tujuan dan nama pemilik akun.');
+            if (!confirm(`Ajukan penarikan ${tokenNumber(amount)} token $ (Rp${tokenNumber(amount)}) ke ${method} ${account} atas nama ${accountName}?`)) return;
+            try {
+                // Simpan permintaan dahulu; saldo baru dikurangi setelah dokumen berhasil dibuat.
+                const id = await window.fbCreateTokenWithdrawal({ amount, method, account, accountName, status: 'menunggu_admin' });
+                state.tokenBalance = Number(state.tokenBalance || 0) - amount;
+                await window.fbSaveUserData(currentUser.uid, { tokenBalance: state.tokenBalance });
+                document.getElementById('token-wd-amount').value = '';
+                document.getElementById('token-wd-account').value = '';
+                document.getElementById('token-wd-name').value = '';
+                updateUI(); await loadMyTokenWithdrawals();
+                showToast('Pengajuan penarikan token berhasil dikirim. ID: ' + id);
+            } catch (e) { console.error(e); showToast('Pengajuan gagal. Periksa Firestore Rules collection tokenWithdrawals dan akses users.'); }
+        }
+        async function loadMyTokenWithdrawals() {
+            const box = document.getElementById('my-token-withdrawals'); if (!box) return;
+            if (!currentUser) { box.textContent = 'Login untuk melihat riwayat penarikan token.'; return; }
+            try {
+                const rows = (await window.fbListTokenWithdrawals()).filter(x => x.uid === currentUser.uid);
+                box.innerHTML = '<h4 class="font-bold text-white mt-3">Riwayat pengajuan</h4>' + (rows.length ? rows.map(x => `<div class="p-3 rounded-lg bg-black/30 border border-purple-800"><b>${escapeHtml(x.id)}</b><div>${tokenNumber(x.amount)} token $ • ${escapeHtml(x.method || '')} • ${escapeHtml(x.account || '')}</div><div class="text-yellow-300">Status: ${escapeHtml(x.status || 'menunggu_admin')}</div></div>`).join('') : '<p>Belum ada pengajuan penarikan token.</p>');
+            } catch(e) { box.textContent = 'Gagal memuat riwayat. Periksa Firestore Rules.'; }
+        }
+        async function loadAdminTokenWithdrawals() {
+            const box = document.getElementById('admin-token-withdrawal-list'); if (!box) return;
+            if (!isAdmin()) { box.textContent = 'Akses ditolak.'; return; }
+            try {
+                const rows = await window.fbListTokenWithdrawals();
+                box.innerHTML = rows.length ? rows.map(x => `<div class="p-4 rounded-xl bg-black/30 border border-purple-800 space-y-2"><b class="text-white">${escapeHtml(x.id)}</b><p class="text-xs text-purple-300">${escapeHtml(x.displayName || 'Pengguna')} • ${escapeHtml(x.email || '')} • UID: ${escapeHtml(x.uid || '')}</p><p>${tokenNumber(x.amount)} token $ = Rp${tokenNumber(x.amount)}</p><p>Tujuan: ${escapeHtml(x.method || '')} • ${escapeHtml(x.account || '')} • ${escapeHtml(x.accountName || '')}</p><p class="text-yellow-300">Status: ${escapeHtml(x.status || 'menunggu_admin')}</p>${x.status === 'menunggu_admin' ? `<div class="flex gap-2"><button onclick="finishTokenWithdrawal('${x.id}','${x.uid}',${Number(x.amount)||0},'berhasil')" class="px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold">Tandai sudah dibayar</button><button onclick="finishTokenWithdrawal('${x.id}','${x.uid}',${Number(x.amount)||0},'ditolak')" class="px-3 py-2 rounded-lg bg-red-800 text-white text-xs font-bold">Tolak & kembalikan token</button></div>` : ''}</div>`).join('') : 'Belum ada pengajuan penarikan.';
+            } catch(e) { console.error(e); box.textContent = 'Gagal membaca tokenWithdrawals. Periksa Firestore Rules.'; }
+        }
+        async function finishTokenWithdrawal(id, uid, amount, status) {
+            if (!isAdmin() || !confirm(status === 'berhasil' ? 'Pastikan transfer sudah dilakukan. Tandai selesai?' : 'Tolak pengajuan dan kembalikan token ke pengguna?')) return;
+            try {
+                if (status === 'ditolak') {
+                    const user = await window.fbLoadUserData(uid);
+                    await window.fbSaveUserData(uid, { tokenBalance: (Number(user?.tokenBalance) || 0) + amount });
+                }
+                await window.fbUpdateTokenWithdrawal(id, { status, processedAt: Date.now(), processedBy: currentUser.email });
+                await loadAdminTokenWithdrawals();
+                showToast(status === 'berhasil' ? 'Penarikan ditandai selesai.' : 'Pengajuan ditolak dan token dikembalikan.');
+            } catch(e) { console.error(e); showToast('Gagal memproses. Periksa Firestore Rules.'); }
+        }
+
         async function adminSetSpinPrize() {
             if(!isAdmin()) return;
             const uid=document.getElementById('admin-spin-uid').value.trim(); const prize=Number(document.getElementById('admin-spin-prize').value);
@@ -1554,11 +1656,55 @@
             catch(e){console.error(e);showToast('Gagal menyetel hadiah. Periksa Firestore Rules admin.');}
         }
 
+        function liveChatAlias(uid) {
+            let hash = 0;
+            for (let i=0;i<String(uid).length;i++) hash = (hash*31 + String(uid).charCodeAt(i)) >>> 0;
+            return 'Member-' + String(hash % 9000 + 1000);
+        }
+        function renderLiveChatMessages(rows) {
+            const box=document.getElementById('live-chat-messages'); if(!box) return;
+            box.innerHTML=rows.length?rows.map(x=>`<div class="flex ${x.senderRole==='admin'?'justify-start':'justify-end'}"><div class="max-w-[85%] p-3 rounded-xl ${x.senderRole==='admin'?'bg-purple-900/70 border border-purple-700':'bg-pink-900/50 border border-pink-700'}"><p class="text-[10px] text-purple-300 mb-1">${escapeHtml(x.alias||'Member')}</p><p class="text-sm text-white whitespace-pre-wrap break-words">${escapeHtml(x.message||'')}</p><p class="text-[10px] text-purple-400 mt-1">${x.createdAt?new Date(x.createdAt).toLocaleString('id-ID'):''}</p></div></div>`).join(''):'<p class="text-sm text-purple-400 text-center">Belum ada pesan. Silakan tulis pesan untuk admin.</p>';
+            box.scrollTop=box.scrollHeight;
+        }
+        async function loadMyLiveChat() {
+            const alias=document.getElementById('live-chat-alias');
+            if(!currentUser){renderLiveChatMessages([]);return;}
+            if(alias) alias.textContent=liveChatAlias(currentUser.uid);
+            try { renderLiveChatMessages(await window.fbListMyLiveChat()); }
+            catch(e){console.error(e); const box=document.getElementById('live-chat-messages'); if(box)box.textContent='Gagal memuat chat. Periksa Firestore Rules liveChatMessages.';}
+        }
+        async function sendLiveChat() {
+            if(!currentUser) return showToast('Login Google dulu untuk mengirim pesan.');
+            const input=document.getElementById('live-chat-input'), message=input.value.trim();
+            if(!message) return showToast('Tulis pesan terlebih dahulu.');
+            try { await window.fbSendLiveChat(message,liveChatAlias(currentUser.uid)); input.value=''; await loadMyLiveChat(); showToast('Pesan terkirim ke admin.'); }
+            catch(e){console.error(e);showToast('Pesan gagal dikirim. Periksa koneksi dan Firestore Rules.');}
+        }
+        async function loadAdminLiveChat() {
+            const box=document.getElementById('admin-live-chat-list'); if(!box)return;
+            if(!isAdmin()){box.textContent='Akses ditolak.';return;}
+            try {
+                const rows=await window.fbListAllLiveChat();
+                const users=[...new Set(rows.map(x=>x.uid))];
+                box.innerHTML=users.length?users.map(uid=>{
+                    const chat=rows.filter(x=>x.uid===uid), alias=chat.find(x=>x.senderRole==='user')?.alias||liveChatAlias(uid);
+                    return `<div class="p-4 rounded-xl bg-black/30 border border-purple-800 space-y-3"><div class="flex justify-between"><b class="text-emerald-300">${escapeHtml(alias)}</b><span class="text-[10px] text-purple-400">${chat.length} pesan</span></div><div class="space-y-2 max-h-64 overflow-y-auto">${chat.map(x=>`<div class="p-3 rounded-lg ${x.senderRole==='admin'?'bg-purple-900/60':'bg-slate-900'}"><p class="text-[10px] text-purple-300">${x.senderRole==='admin'?'Admin Support':escapeHtml(x.alias||alias)}</p><p class="text-sm text-white whitespace-pre-wrap break-words">${escapeHtml(x.message||'')}</p><p class="text-[10px] text-purple-500">${x.createdAt?new Date(x.createdAt).toLocaleString('id-ID'):''}</p></div>`).join('')}</div><div class="flex gap-2"><input id="admin-chat-reply-${escapeHtml(uid)}" maxlength="1000" placeholder="Balas ${escapeHtml(alias)}..." class="min-w-0 flex-1 p-3 rounded-xl bg-slate-900 border border-purple-700 text-white"><button onclick="replyLiveChat('${escapeHtml(uid)}')" class="px-4 rounded-xl bg-emerald-700 text-white font-bold">Balas</button></div></div>`;
+                }).join(''):'<p class="text-sm text-purple-300">Belum ada pesan masuk.</p>';
+            } catch(e){console.error(e);box.textContent='Gagal membaca inbox. Periksa Rules liveChatMessages.';}
+        }
+        async function replyLiveChat(uid) {
+            if(!isAdmin())return;
+            const input=document.getElementById('admin-chat-reply-'+uid), message=input?.value.trim();
+            if(!message)return showToast('Isi balasan terlebih dahulu.');
+            try { await window.fbSendLiveChat(message,'Admin Support',uid); await loadAdminLiveChat(); showToast('Balasan terkirim.'); }
+            catch(e){console.error(e);showToast('Balasan gagal dikirim. Periksa Firestore Rules.');}
+        }
+
         function escapeHtml(value) { return String(value??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
         // ====================== NAVIGATION ======================
         function switchTab(tabId) {
-            if ((tabId === 'admin' || tabId === 'admin-token') && !isAdmin()) { showToast('Menu ini khusus admin.'); return; }
+            if ((tabId === 'admin' || tabId === 'admin-token' || tabId === 'admin-chat') && !isAdmin()) { showToast('Menu ini khusus admin.'); return; }
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('text-white', 'bg-purple-900/60', 'neon-border');
@@ -1574,7 +1720,10 @@
                 targetNav.classList.add('text-white', 'bg-purple-900/60', 'neon-border');
             }
             if (tabId === 'admin') loadAdminReferrals();
-            if (tabId === 'admin-token') loadAdminTokenTopups();
+            if (tabId === 'admin-token') { loadAdminTokenTopups(); loadAdminTokenWithdrawals(); }
+            if (tabId === 'admin-chat') loadAdminLiveChat();
+            if (tabId === 'cs') loadMyLiveChat();
+            if (tabId === 'wheel') loadMyTokenWithdrawals();
             if (tabId === 'topup-token') loadMyTokenTopups();
             if (tabId === 'undang') renderReferralUI();
             window.scrollTo({ top: 0, behavior: 'smooth' });
