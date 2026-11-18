@@ -29,7 +29,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Konfigurasi dari project Firebase Ternak Moneyy
         const firebaseConfig = {
@@ -84,6 +84,20 @@
                     return snap.data();
                 }
                 return null;
+            };
+
+            window.fbFindInviterByCode = async (code) => {
+                if (!code) return null;
+                const q = query(collection(db, "users"), where("referralCode", "==", String(code).toUpperCase()));
+                const result = await getDocs(q);
+                if (result.empty) return null;
+                const found = result.docs[0];
+                return { uid: found.id, ...found.data() };
+            };
+
+            window.fbListReferralUsers = async () => {
+                const result = await getDocs(collection(db, "users"));
+                return result.docs.map(item => ({ uid: item.id, ...item.data() }));
             };
 
         } catch (error) {
@@ -166,6 +180,7 @@
                 <button onclick="switchTab('profil')" id="nav-profil" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
                     <i class="fa-solid fa-user-gear mr-2"></i> Profil
                 </button>
+                <button onclick="switchTab('undang')" id="nav-undang" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40"><i class="fa-solid fa-user-plus mr-2"></i> Undang Teman</button>
                 <button onclick="switchTab('checkin')" id="nav-checkin" class="nav-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all text-purple-300 hover:text-white hover:bg-purple-900/40">
                     <i class="fa-solid fa-calendar-check mr-2"></i> Daily Check-in
                 </button>
@@ -205,6 +220,7 @@
             <button onclick="switchTab('profil'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
                 <i class="fa-solid fa-user-gear mr-3"></i> Profil
             </button>
+            <button onclick="switchTab('undang'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40"><i class="fa-solid fa-user-plus mr-3"></i> Undang Teman</button>
             <button onclick="switchTab('checkin'); closeMobileMenu();" class="w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-purple-200 hover:bg-purple-900/40">
                 <i class="fa-solid fa-calendar-check mr-3"></i> Daily Check-in
             </button>
@@ -670,6 +686,25 @@
             </div>
         </section>
 
+        <!-- TAB: UNDANG TEMAN -->
+        <section id="tab-undang" class="tab-content hidden space-y-6">
+            <div class="max-w-3xl mx-auto glass-panel p-6 sm:p-8 rounded-3xl neon-border space-y-5">
+                <div class="text-center"><div class="w-16 h-16 mx-auto rounded-2xl bg-purple-900/60 flex items-center justify-center text-3xl text-pink-400"><i class="fa-solid fa-user-plus"></i></div>
+                <h2 class="font-orbitron text-2xl font-extrabold text-white mt-4">Undang Teman</h2><p class="text-sm text-purple-300 mt-2">Bagikan kode undanganmu kepada teman.</p></div>
+                <div class="rounded-2xl bg-purple-950/60 border border-purple-800 p-5 text-center"><p class="text-xs text-purple-300">KODE UNDANGAN SAYA</p><p id="my-referral-code" class="font-orbitron text-3xl font-bold text-white tracking-widest my-3">LOGIN DULU</p><button onclick="copyReferralCode()" class="px-5 py-2 rounded-xl bg-purple-700 text-white font-bold"><i class="fa-solid fa-copy mr-2"></i>Salin Kode</button></div>
+                <div class="grid sm:grid-cols-2 gap-3 text-center"><div class="p-4 rounded-xl bg-black/30 border border-purple-800"><p class="text-xs text-purple-300">Bonus pengundang per teman valid</p><p class="text-2xl font-bold text-emerald-400">Rp10.000</p></div><div class="p-4 rounded-xl bg-black/30 border border-purple-800"><p class="text-xs text-purple-300">Bonus teman baru setelah 1x check-in</p><p class="text-2xl font-bold text-emerald-400">Rp20.000</p></div></div>
+                <p class="text-xs text-purple-400 text-center">Referral menjadi VALID setelah teman melakukan check-in pertama. Reward diperiksa dan ditambahkan manual oleh admin.</p>
+                <div class="flex items-center justify-between"><h3 class="font-bold text-white">Teman yang saya undang</h3><button onclick="loadMyReferrals()" class="text-xs text-pink-300"><i class="fa-solid fa-rotate mr-1"></i>Perbarui</button></div>
+                <div id="my-referral-list" class="space-y-2"><p class="text-sm text-purple-400">Login untuk melihat daftar undangan.</p></div>
+            </div>
+        </section>
+
+        <!-- TAB: ADMIN REFERRAL -->
+        <section id="tab-admin" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-6 rounded-3xl neon-border"><div class="flex items-center justify-between gap-3"><div><h2 class="font-orbitron text-xl font-bold text-white">Admin - Data Undangan</h2><p class="text-xs text-purple-300 mt-1">Daftar pengguna dan siapa yang mengundang mereka.</p></div><button onclick="loadAdminReferrals()" class="px-3 py-2 rounded-xl bg-purple-700 text-white text-xs font-bold">Muat ulang</button></div>
+            <p id="admin-referral-status" class="text-xs text-purple-400 mt-4">Khusus admin.</p><div id="admin-referral-list" class="mt-4 space-y-3"><p class="text-sm text-purple-300">Buka menu admin untuk memuat data.</p></div></div>
+        </section>
+
     </main>
 
     <!-- Footer -->
@@ -726,6 +761,11 @@
         let currentUser = null; // Firebase user object
         let isSyncing = false;  // cegah race condition saat save/load
         let authReady = false;
+        const ADMIN_EMAIL = 'ripalwhwiwiw@gmail.com';
+        let myReferralCode = '';
+        const referralParam = new URLSearchParams(window.location.search).get('ref');
+        if (referralParam) localStorage.setItem('ternak_money_pending_ref', referralParam.trim().toUpperCase());
+
 
         // Voucher Database (hanya kode yang terdaftar yang valid)
         const voucherDatabase = {
@@ -812,6 +852,22 @@
                 isSyncing = true;
                 showToast("Sinkronisasi data akun...");
                 const cloudData = await window.fbLoadUserData(user.uid);
+                const ownCode = 'TM' + String(user.uid).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
+                let referralMeta = {};
+                if (!cloudData) {
+                    const pendingCode = localStorage.getItem('ternak_money_pending_ref');
+                    if (pendingCode && pendingCode !== ownCode) {
+                        try {
+                            const inviter = await window.fbFindInviterByCode(pendingCode);
+                            if (inviter && inviter.uid !== user.uid) {
+                                referralMeta = { referredByUid: inviter.uid, referredByEmail: inviter.email || '', referredByName: inviter.displayName || 'Pengguna', referralStatus: 'menunggu_verifikasi', referralCreatedAt: Date.now() };
+                            }
+                        } catch (refErr) { console.warn('Pencatatan referral belum berhasil:', refErr); }
+                    }
+                    localStorage.removeItem('ternak_money_pending_ref');
+                }
+                myReferralCode = (cloudData && cloudData.referralCode) || ownCode;
+                await window.fbSaveUserData(user.uid, { referralCode: myReferralCode, displayName: user.displayName || '', email: user.email || '', ...referralMeta });
 
                 if (cloudData && cloudData.balance !== undefined) {
                     // Ada data di cloud → pakai data cloud
@@ -854,6 +910,8 @@
             updateUI();
             renderHistoryLists();
             renderCheckIn();
+            renderReferralUI();
+            updateAdminNav();
         }
 
         function onUserLoggedOut() {
@@ -866,6 +924,8 @@
             renderCheckIn();
             updateAuthUI();
             updateProfileUI(null);
+            renderReferralUI();
+            updateAdminNav();
             showToast("Anda telah logout. Mode Guest aktif.");
         }
 
@@ -1225,6 +1285,22 @@
                 time: new Date().toLocaleString('id-ID')
             });
 
+            // Validasi referral pada check-in pertama pengguna yang diundang.
+            // Status disimpan di dokumen pengguna agar dapat dibaca Admin Panel.
+            if (currentUser && window.fbSaveUserData) {
+                window.fbLoadUserData(currentUser.uid).then(async (userData) => {
+                    if (userData && userData.referredByUid && userData.referralStatus !== 'valid') {
+                        await window.fbSaveUserData(currentUser.uid, {
+                            referralStatus: 'valid',
+                            referralFirstCheckinDate: today,
+                            referralValidatedAt: Date.now()
+                        });
+                        showToast('Undangan berhasil divalidasi!');
+                        if (isAdmin()) loadAdminReferrals();
+                    }
+                }).catch(err => console.warn('Gagal memperbarui status referral:', err));
+            }
+
             state.topupHistory.unshift({
                 id: 'CHECKIN-' + today.replace(/-/g, ''),
                 info: 'Bonus Daily Check-in',
@@ -1239,8 +1315,57 @@
             renderHistoryLists();
         }
 
+        // ====================== REFERRAL & ADMIN ======================
+        function isAdmin() { return !!currentUser && String(currentUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase(); }
+        function updateAdminNav() {
+            let desktop = document.getElementById('nav-admin');
+            let mobile = document.getElementById('mobile-admin-nav');
+            if (isAdmin()) {
+                if (!desktop) {
+                    const nav = document.querySelector('header nav');
+                    if (nav) { const b = document.createElement('button'); b.id='nav-admin'; b.className='nav-btn px-4 py-2 rounded-xl text-sm font-semibold text-yellow-300 hover:text-white'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-2"></i>Admin'; b.onclick=()=>switchTab('admin'); nav.appendChild(b); }
+                }
+                if (!mobile) { const menu=document.getElementById('mobile-menu'); if(menu){ const b=document.createElement('button'); b.id='mobile-admin-nav'; b.className='w-full text-left px-4 py-3 rounded-xl text-sm font-semibold text-yellow-200'; b.innerHTML='<i class="fa-solid fa-shield-halved mr-3"></i>Admin Referral'; b.onclick=()=>{switchTab('admin');closeMobileMenu();}; menu.appendChild(b); } }
+            } else { if(desktop) desktop.remove(); if(mobile) mobile.remove(); }
+        }
+        function renderReferralUI() {
+            const codeEl=document.getElementById('my-referral-code');
+            if (!currentUser) { if(codeEl) codeEl.textContent='LOGIN DULU'; return; }
+            myReferralCode = myReferralCode || ('TM'+String(currentUser.uid).replace(/[^a-z0-9]/gi,'').slice(0,8).toUpperCase());
+            if(codeEl) codeEl.textContent=myReferralCode;
+            loadMyReferrals();
+        }
+        function copyReferralCode() {
+            if(!currentUser) return showToast('Login Google dulu untuk mendapatkan kode undangan.');
+            const link=window.location.origin+window.location.pathname+'?ref='+encodeURIComponent(myReferralCode);
+            navigator.clipboard?.writeText(link).then(()=>showToast('Link undangan berhasil disalin!')).catch(()=>showToast('Kode undangan: '+myReferralCode));
+        }
+        async function loadMyReferrals() {
+            const box=document.getElementById('my-referral-list'); if(!box) return;
+            if(!currentUser){box.innerHTML='<p class="text-sm text-purple-400">Login terlebih dahulu.</p>';return;}
+            try {
+                const users=await window.fbListReferralUsers();
+                const mine=users.filter(u=>u.referredByUid===currentUser.uid);
+                box.innerHTML=mine.length?mine.map(u=>`<div class="p-3 rounded-xl bg-black/30 border border-purple-800 flex justify-between gap-3"><div><p class="text-sm font-bold text-white">${escapeHtml(u.displayName||'Pengguna baru')}</p><p class="text-xs text-purple-400">${escapeHtml(u.email||'')}</p></div><span class="text-xs text-yellow-300">${escapeHtml(u.referralStatus||'tercatat')}</span></div>`).join(''):'<p class="text-sm text-purple-400">Belum ada teman yang tercatat menggunakan link kamu.</p>';
+            } catch(e) { box.innerHTML='<p class="text-sm text-red-300">Tidak dapat membaca data referral. Periksa Firestore Rules.</p>'; }
+        }
+        async function loadAdminReferrals() {
+            const box=document.getElementById('admin-referral-list'), status=document.getElementById('admin-referral-status');
+            if(!isAdmin()){ if(status)status.textContent='Akses ditolak.'; if(box)box.innerHTML=''; return; }
+            status.textContent='Memuat data pengguna dari Firestore...';
+            try {
+                const users=await window.fbListReferralUsers();
+                const referred=users.filter(u=>u.referredByUid);
+                const validCount=referred.filter(u=>u.referralStatus==='valid').length;
+                status.textContent=`Total akun: ${users.length} • Referral tercatat: ${referred.length} • Sudah valid: ${validCount}`;
+                box.innerHTML=referred.length?referred.map(u=>`<div class="p-4 rounded-xl bg-black/30 border border-purple-800"><p class="font-bold text-white">${escapeHtml(u.displayName||'Tanpa nama')}</p><p class="text-xs text-purple-300">Email teman: ${escapeHtml(u.email||'-')}</p><p class="text-xs text-emerald-300 mt-1">Diundang oleh: ${escapeHtml(u.referredByName||'-')} (${escapeHtml(u.referredByEmail||u.referredByUid||'-')})</p><p class="text-xs mt-1 ${u.referralStatus==='valid'?'text-emerald-300':'text-yellow-300'}">Status: ${u.referralStatus==='valid'?'VALID — sudah check-in pertama': 'MENUNGGU CHECK-IN'}</p>${u.referralFirstCheckinDate?`<p class="text-xs text-purple-400 mt-1">Check-in pertama: ${escapeHtml(u.referralFirstCheckinDate)}</p>`:''}</div>`).join(''):'<p class="text-sm text-purple-300">Belum ada data undangan yang tercatat.</p>';
+            } catch(e) { console.error(e); status.textContent='Gagal memuat. Periksa Firestore Rules: admin perlu izin membaca collection users.'; box.innerHTML=''; }
+        }
+        function escapeHtml(value) { return String(value??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
         // ====================== NAVIGATION ======================
         function switchTab(tabId) {
+            if (tabId === 'admin' && !isAdmin()) { showToast('Menu ini khusus admin.'); return; }
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('text-white', 'bg-purple-900/60', 'neon-border');
@@ -1255,6 +1380,8 @@
                 targetNav.classList.remove('text-purple-300');
                 targetNav.classList.add('text-white', 'bg-purple-900/60', 'neon-border');
             }
+            if (tabId === 'admin') loadAdminReferrals();
+            if (tabId === 'undang') renderReferralUI();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
