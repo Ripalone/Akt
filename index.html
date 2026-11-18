@@ -86,18 +86,54 @@
                 return null;
             };
 
+            // Referral: kode publik dipisah dari profil/saldo pengguna.
+            window.fbRegisterReferralCode = async (uid, code, displayName) => {
+                if (!uid || !code) throw new Error("UID/kode referral kosong");
+                const ref = doc(db, "referralCodes", String(code));
+                const snap = await getDoc(ref);
+                if (snap.exists()) {
+                    if (snap.data().uid !== uid) throw new Error("Kode referral sudah digunakan akun lain");
+                    return;
+                }
+                await setDoc(ref, { uid, displayName: displayName || "Pengguna" });
+            };
+
             window.fbFindInviterByCode = async (code) => {
                 if (!code) return null;
-                const q = query(collection(db, "users"), where("referralCode", "==", String(code).toUpperCase()));
-                const result = await getDocs(q);
-                if (result.empty) return null;
-                const found = result.docs[0];
-                return { uid: found.id, ...found.data() };
+                const snap = await getDoc(doc(db, "referralCodes", String(code)));
+                if (!snap.exists()) return null;
+                return { uid: snap.data().uid, displayName: snap.data().displayName || "Pengguna" };
+            };
+
+            window.fbCreateReferralRecord = async (data) => {
+                if (!auth.currentUser) throw new Error("Harus login");
+                const ref = doc(db, "referrals", auth.currentUser.uid);
+                const existing = await getDoc(ref);
+                if (existing.exists()) return false;
+                await setDoc(ref, { ...data, inviteeUid: auth.currentUser.uid });
+                return true;
+            };
+
+            window.fbReportReferralCheckin = async () => {
+                if (!auth.currentUser) return;
+                const ref = doc(db, "referrals", auth.currentUser.uid);
+                const snap = await getDoc(ref);
+                if (snap.exists()) await updateDoc(ref, { checkinReportedAt: Date.now() });
+            };
+
+            window.fbUpdateReferralStatus = async (inviteeUid, status) => {
+                if (!auth.currentUser || String(auth.currentUser.email || '').toLowerCase() !== 'ripalwhwiwiw@gmail.com') throw new Error("Akses admin ditolak");
+                await updateDoc(doc(db, "referrals", inviteeUid), { status, validatedAt: Date.now() });
             };
 
             window.fbListReferralUsers = async () => {
-                const result = await getDocs(collection(db, "users"));
-                return result.docs.map(item => ({ uid: item.id, ...item.data() }));
+                if (!auth.currentUser) throw new Error("Harus login");
+                const ref = collection(db, "referrals");
+                const isAdmin = String(auth.currentUser.email || '').toLowerCase() === 'ripalwhwiwiw@gmail.com';
+                const result = isAdmin
+                    ? await getDocs(ref)
+                    : await getDocs(query(ref, where("inviterUid", "==", auth.currentUser.uid)));
+                return result.docs.map(item => ({ uid: item.id, ...item.data(), referralStatus: item.data().status || 'menunggu_verifikasi' }));
             };
 
             // Token wallet, pesanan top-up, dan hadiah spin admin
@@ -827,7 +863,7 @@
         const ADMIN_EMAIL = 'ripalwhwiwiw@gmail.com';
         let myReferralCode = '';
         const referralParam = new URLSearchParams(window.location.search).get('ref');
-        if (referralParam) localStorage.setItem('ternak_money_pending_ref', referralParam.trim().toUpperCase());
+        if (referralParam) localStorage.setItem('ternak_money_pending_ref', referralParam.trim());
 
 
         // Voucher Database (hanya kode yang terdaftar yang valid)
@@ -915,22 +951,34 @@
                 isSyncing = true;
                 showToast("Sinkronisasi data akun...");
                 const cloudData = await window.fbLoadUserData(user.uid);
-                const ownCode = 'TM' + String(user.uid).replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
-                let referralMeta = {};
-                if (!cloudData) {
-                    const pendingCode = localStorage.getItem('ternak_money_pending_ref');
-                    if (pendingCode && pendingCode !== ownCode) {
-                        try {
-                            const inviter = await window.fbFindInviterByCode(pendingCode);
-                            if (inviter && inviter.uid !== user.uid) {
-                                referralMeta = { referredByUid: inviter.uid, referredByEmail: inviter.email || '', referredByName: inviter.displayName || 'Pengguna', referralStatus: 'menunggu_verifikasi', referralCreatedAt: Date.now() };
-                            }
-                        } catch (refErr) { console.warn('Pencatatan referral belum berhasil:', refErr); }
-                    }
-                    localStorage.removeItem('ternak_money_pending_ref');
+                const ownCode = 'TM' + String(user.uid);
+                myReferralCode = ownCode;
+                await window.fbRegisterReferralCode(user.uid, myReferralCode, user.displayName || 'Pengguna');
+
+                // Catat undangan hanya sekali, termasuk bila dokumen profil sudah pernah dibuat.
+                const pendingCode = localStorage.getItem('ternak_money_pending_ref');
+                if (pendingCode && pendingCode !== myReferralCode) {
+                    try {
+                        const inviter = await window.fbFindInviterByCode(pendingCode);
+                        if (inviter && inviter.uid !== user.uid) {
+                            await window.fbCreateReferralRecord({
+                                inviterUid: inviter.uid,
+                                inviterName: inviter.displayName || 'Pengguna',
+                                inviteeName: user.displayName || 'Pengguna',
+                                inviteeEmail: user.email || '',
+                                referralCode: pendingCode,
+                                status: 'menunggu_verifikasi',
+                                createdAt: Date.now()
+                            });
+                            localStorage.removeItem('ternak_money_pending_ref');
+                        } else if (!inviter) {
+                            console.warn('Kode referral belum ditemukan; kode disimpan untuk dicoba lagi.');
+                        } else {
+                            localStorage.removeItem('ternak_money_pending_ref');
+                        }
+                    } catch (refErr) { console.warn('Pencatatan referral belum berhasil:', refErr); }
                 }
-                myReferralCode = (cloudData && cloudData.referralCode) || ownCode;
-                await window.fbSaveUserData(user.uid, { referralCode: myReferralCode, displayName: user.displayName || '', email: user.email || '', ...referralMeta });
+                await window.fbSaveUserData(user.uid, { referralCode: myReferralCode, displayName: user.displayName || '', email: user.email || '' });
 
                 if (cloudData && cloudData.balance !== undefined) {
                     // Ada data di cloud → pakai data cloud
@@ -1351,20 +1399,9 @@
                 time: new Date().toLocaleString('id-ID')
             });
 
-            // Validasi referral pada check-in pertama pengguna yang diundang.
-            // Status disimpan di dokumen pengguna agar dapat dibaca Admin Panel.
-            if (currentUser && window.fbSaveUserData) {
-                window.fbLoadUserData(currentUser.uid).then(async (userData) => {
-                    if (userData && userData.referredByUid && userData.referralStatus !== 'valid') {
-                        await window.fbSaveUserData(currentUser.uid, {
-                            referralStatus: 'valid',
-                            referralFirstCheckinDate: today,
-                            referralValidatedAt: Date.now()
-                        });
-                        showToast('Undangan berhasil divalidasi!');
-                        if (isAdmin()) loadAdminReferrals();
-                    }
-                }).catch(err => console.warn('Gagal memperbarui status referral:', err));
+            // Check-in dilaporkan ke dokumen referral. Admin yang mengesahkan status VALID.
+            if (currentUser && window.fbReportReferralCheckin) {
+                window.fbReportReferralCheckin().catch(err => console.warn('Gagal melaporkan check-in referral:', err));
             }
 
             state.topupHistory.unshift({
@@ -1397,7 +1434,7 @@
         function renderReferralUI() {
             const codeEl=document.getElementById('my-referral-code');
             if (!currentUser) { if(codeEl) codeEl.textContent='LOGIN DULU'; return; }
-            myReferralCode = myReferralCode || ('TM'+String(currentUser.uid).replace(/[^a-z0-9]/gi,'').slice(0,8).toUpperCase());
+            myReferralCode = 'TM' + String(currentUser.uid);
             if(codeEl) codeEl.textContent=myReferralCode;
             loadMyReferrals();
         }
@@ -1410,22 +1447,25 @@
             const box=document.getElementById('my-referral-list'); if(!box) return;
             if(!currentUser){box.innerHTML='<p class="text-sm text-purple-400">Login terlebih dahulu.</p>';return;}
             try {
-                const users=await window.fbListReferralUsers();
-                const mine=users.filter(u=>u.referredByUid===currentUser.uid);
-                box.innerHTML=mine.length?mine.map(u=>`<div class="p-3 rounded-xl bg-black/30 border border-purple-800 flex justify-between gap-3"><div><p class="text-sm font-bold text-white">${escapeHtml(u.displayName||'Pengguna baru')}</p><p class="text-xs text-purple-400">${escapeHtml(u.email||'')}</p></div><span class="text-xs text-yellow-300">${escapeHtml(u.referralStatus||'tercatat')}</span></div>`).join(''):'<p class="text-sm text-purple-400">Belum ada teman yang tercatat menggunakan link kamu.</p>';
-            } catch(e) { box.innerHTML='<p class="text-sm text-red-300">Tidak dapat membaca data referral. Periksa Firestore Rules.</p>'; }
+                const referrals=await window.fbListReferralUsers();
+                box.innerHTML=referrals.length?referrals.map(u=>`<div class="p-3 rounded-xl bg-black/30 border border-purple-800 flex justify-between gap-3"><div><p class="text-sm font-bold text-white">${escapeHtml(u.inviteeName||'Pengguna baru')}</p><p class="text-xs text-purple-400">${escapeHtml(u.inviteeEmail||'')}</p>${u.checkinReportedAt?'<p class="text-[10px] text-emerald-300">Check-in dilaporkan</p>':''}</div><span class="text-xs text-yellow-300">${escapeHtml(u.referralStatus||'menunggu_verifikasi')}</span></div>`).join(''):'<p class="text-sm text-purple-400">Belum ada teman yang tercatat menggunakan link kamu.</p>';
+            } catch(e) { console.error(e); box.innerHTML='<p class="text-sm text-red-300">Tidak dapat membaca data referral. Periksa Rules koleksi referrals.</p>'; }
+        }
+        async function adminValidateReferral(inviteeUid) {
+            if(!isAdmin()) return;
+            try { await window.fbUpdateReferralStatus(inviteeUid, 'valid'); await loadAdminReferrals(); showToast('Referral disahkan VALID.'); }
+            catch(e) { console.error(e); showToast('Gagal mengesahkan referral.'); }
         }
         async function loadAdminReferrals() {
             const box=document.getElementById('admin-referral-list'), status=document.getElementById('admin-referral-status');
             if(!isAdmin()){ if(status)status.textContent='Akses ditolak.'; if(box)box.innerHTML=''; return; }
-            status.textContent='Memuat data pengguna dari Firestore...';
+            status.textContent='Memuat data referral...';
             try {
-                const users=await window.fbListReferralUsers();
-                const referred=users.filter(u=>u.referredByUid);
-                const validCount=referred.filter(u=>u.referralStatus==='valid').length;
-                status.textContent=`Total akun: ${users.length} • Referral tercatat: ${referred.length} • Sudah valid: ${validCount}`;
-                box.innerHTML=referred.length?referred.map(u=>`<div class="p-4 rounded-xl bg-black/30 border border-purple-800"><p class="font-bold text-white">${escapeHtml(u.displayName||'Tanpa nama')}</p><p class="text-xs text-purple-300">Email teman: ${escapeHtml(u.email||'-')}</p><p class="text-xs text-emerald-300 mt-1">Diundang oleh: ${escapeHtml(u.referredByName||'-')} (${escapeHtml(u.referredByEmail||u.referredByUid||'-')})</p><p class="text-xs mt-1 ${u.referralStatus==='valid'?'text-emerald-300':'text-yellow-300'}">Status: ${u.referralStatus==='valid'?'VALID — sudah check-in pertama': 'MENUNGGU CHECK-IN'}</p>${u.referralFirstCheckinDate?`<p class="text-xs text-purple-400 mt-1">Check-in pertama: ${escapeHtml(u.referralFirstCheckinDate)}</p>`:''}</div>`).join(''):'<p class="text-sm text-purple-300">Belum ada data undangan yang tercatat.</p>';
-            } catch(e) { console.error(e); status.textContent='Gagal memuat. Periksa Firestore Rules: admin perlu izin membaca collection users.'; box.innerHTML=''; }
+                const referrals=await window.fbListReferralUsers();
+                const validCount=referrals.filter(u=>u.referralStatus==='valid').length;
+                status.textContent=`Total referral: ${referrals.length} • Sudah valid: ${validCount}`;
+                box.innerHTML=referrals.length?referrals.map(u=>`<div class="p-4 rounded-xl bg-black/30 border border-purple-800"><p class="font-bold text-white">${escapeHtml(u.inviteeName||'Tanpa nama')}</p><p class="text-xs text-purple-300">Email teman: ${escapeHtml(u.inviteeEmail||'-')}</p><p class="text-xs text-emerald-300 mt-1">Diundang oleh: ${escapeHtml(u.inviterName||'-')} (${escapeHtml(u.inviterUid||'-')})</p><p class="text-xs mt-1 ${u.referralStatus==='valid'?'text-emerald-300':'text-yellow-300'}">Status: ${u.referralStatus==='valid'?'VALID': 'MENUNGGU VERIFIKASI'}</p>${u.checkinReportedAt?'<p class="text-xs text-purple-400 mt-1">Teman sudah melaporkan check-in</p>':'<p class="text-xs text-yellow-300 mt-1">Belum ada laporan check-in</p>'}${u.referralStatus!=='valid'?`<button onclick="adminValidateReferral('${u.uid}')" class="mt-3 px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold">Sahkan VALID</button>`:''}</div>`).join(''):'<p class="text-sm text-purple-300">Belum ada data undangan yang tercatat.</p>';
+            } catch(e) { console.error(e); status.textContent='Gagal memuat data referral. Periksa Rules koleksi referrals.'; box.innerHTML=''; }
         }
         // ====================== TOKEN, LUCKY WHEEL & QRIS TOP UP ======================
         const TOKEN_SPIN_COST = 4000;
