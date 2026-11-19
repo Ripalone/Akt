@@ -165,28 +165,6 @@
             };
             window.fbUpdateTokenWithdrawal = async (id, data) => updateDoc(doc(db, "tokenWithdrawals", id), data);
 
-            // Penarikan saldo utama (Rupiah)
-            window.fbCreateMainWithdrawal = async (request) => {
-                if (!auth.currentUser) throw new Error("Harus login");
-                const ref = doc(collection(db, "withdrawals"));
-                await setDoc(ref, {
-                    ...request,
-                    uid: auth.currentUser.uid,
-                    email: auth.currentUser.email || '',
-                    displayName: auth.currentUser.displayName || 'Pengguna',
-                    createdAt: Date.now()
-                });
-                return ref.id;
-            };
-            window.fbListMainWithdrawals = async () => {
-                if (!auth.currentUser) throw new Error("Harus login");
-                const ref = collection(db, "withdrawals");
-                const isAdmin = String(auth.currentUser.email || '').toLowerCase() === 'ripalwhwiwiw@gmail.com';
-                const snap = isAdmin ? await getDocs(ref) : await getDocs(query(ref, where("uid", "==", auth.currentUser.uid)));
-                return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAt||0)-(a.createdAt||0));
-            };
-            window.fbUpdateMainWithdrawal = async (id, data) => updateDoc(doc(db, "withdrawals", id), data);
-
             // Live chat: nama publik berupa alias, bukan nama/email Google.
             window.fbSendLiveChat = async (text, alias, recipientUid = null) => {
                 if (!auth.currentUser) throw new Error("Harus login");
@@ -533,17 +511,11 @@
                 <div class="p-5 rounded-2xl bg-purple-950/30 border border-purple-900/40 space-y-4">
                     <h3 class="font-orbitron font-bold text-white text-base">Aksi Penarikan Saldo (WD)</h3>
                     <p class="text-xs text-purple-300">
-                        Minimal penarikan Rp35.000. Pilih DANA atau OVO, lalu isi nomor HP dan nama pemilik akun. Pengajuan akan masuk ke panel admin.
+                        Masukkan nominal yang ingin ditarik. Minimal penarikan Rp 35.000 dan maksimal sesuai saldo tersedia. Sisa saldo akan tetap tersimpan setelah pengajuan WD.
                     </p>
-                    <div class="space-y-3">
+                    <div class="space-y-2">
                         <label for="withdraw-amount" class="block text-xs font-semibold text-purple-200">Nominal Penarikan (Rp)</label>
-                        <input id="withdraw-amount" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Contoh: 50000" class="w-full p-3 rounded-xl bg-slate-900 border border-purple-700/60 text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-pink-500">
-                        <label for="withdraw-method" class="block text-xs font-semibold text-purple-200">Tujuan e-wallet</label>
-                        <select id="withdraw-method" class="w-full p-3 rounded-xl bg-slate-900 border border-purple-700/60 text-white"><option value="DANA">DANA</option><option value="OVO">OVO</option></select>
-                        <label for="withdraw-account" class="block text-xs font-semibold text-purple-200">Nomor HP DANA / OVO</label>
-                        <input id="withdraw-account" type="tel" inputmode="numeric" maxlength="20" placeholder="Contoh: 08xxxxxxxxxx" class="w-full p-3 rounded-xl bg-slate-900 border border-purple-700/60 text-white placeholder-purple-400">
-                        <label for="withdraw-name" class="block text-xs font-semibold text-purple-200">Nama pemilik akun</label>
-                        <input id="withdraw-name" type="text" maxlength="60" placeholder="Nama sesuai akun e-wallet" class="w-full p-3 rounded-xl bg-slate-900 border border-purple-700/60 text-white placeholder-purple-400">
+                        <input id="withdraw-amount" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '')" placeholder="Masukkan nominal, contoh: 50000" class="w-full sm:max-w-sm p-3 rounded-xl bg-slate-900 border border-purple-700/60 text-white placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-pink-500">
                         <p id="withdraw-balance-info" class="text-[11px] text-purple-400">Saldo tersedia akan ditampilkan di bagian saldo utama.</p>
                     </div>
                     <div class="flex flex-col sm:flex-row items-center gap-4 pt-2">
@@ -722,7 +694,7 @@
                         </div>
                         <h3 class="font-orbitron font-bold text-white text-lg">Cara Melakukan Penarikan (WD)</h3>
                         <p class="text-xs sm:text-sm text-purple-200 leading-relaxed">
-                            Masukkan nominal minimal Rp35.000 di menu Profil, pilih DANA atau OVO, lalu isi nomor HP dan nama pemilik akun. Pengajuan masuk ke panel admin; saldo dikembalikan jika pengajuan ditolak.
+                            Masukkan nominal penarikan minimal Rp 35.000 di menu Profil, maksimal sesuai saldo tersedia. Hanya nominal yang diajukan yang dipotong; sisa saldo tetap tersimpan. Kode WD akan dibuat untuk konfirmasi ke Customer Service.
                         </p>
                     </div>
                 </div>
@@ -799,7 +771,7 @@
               <label class="block text-xs text-purple-200" for="token-wd-amount">Jumlah token yang ditarik</label>
               <input id="token-wd-amount" type="number" min="20000" step="1000" placeholder="Minimal 20000" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white">
               <label class="block text-xs text-purple-200" for="token-wd-method">Metode penerimaan</label>
-              <select id="token-wd-method" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white"><option value="DANA">DANA</option><option value="OVO">OVO</option></select>
+              <select id="token-wd-method" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white"><option value="DANA">DANA</option><option value="OVO">OVO</option><option value="GoPay">GoPay</option><option value="Transfer Bank">Transfer Bank</option></select>
               <label class="block text-xs text-purple-200" for="token-wd-account">Nomor rekening / nomor e-wallet</label>
               <input id="token-wd-account" type="text" maxlength="40" placeholder="Masukkan nomor tujuan" class="w-full rounded-xl bg-black/40 border border-purple-700 p-3 text-white">
               <label class="block text-xs text-purple-200" for="token-wd-name">Nama pemilik rekening / akun</label>
@@ -869,7 +841,6 @@
             <h2 class="font-orbitron text-xl font-bold text-white">Admin Token & Top Up</h2>
             <div class="p-4 rounded-xl bg-black/30 border border-purple-800 space-y-3"><h3 class="font-bold text-white">Atur hadiah spin berikutnya</h3><input id="admin-spin-uid" placeholder="UID pengguna" class="w-full p-3 rounded-xl bg-black/40 border border-purple-700 text-white"><input id="admin-spin-prize" type="number" min="1000" max="10000" placeholder="Hadiah token (1.000–10.000)" class="w-full p-3 rounded-xl bg-black/40 border border-purple-700 text-white"><button onclick="adminSetSpinPrize()" class="px-5 py-3 rounded-xl neon-btn text-white font-bold">Simpan Hadiah Sekali Spin</button><p class="text-xs text-purple-400">Hadiah khusus akan dipakai pada spin berikutnya lalu dihapus.</p></div>
             <div><div class="flex justify-between items-center"><h3 class="font-bold text-white">Pesanan top up</h3><button onclick="loadAdminTokenTopups()" class="text-sm text-pink-300">Muat ulang</button></div><div id="admin-token-topup-list" class="space-y-3 mt-3">Belum dimuat.</div></div>
-            <div><div class="flex justify-between items-center"><h3 class="font-bold text-white">Penarikan Saldo Utama (Rp)</h3><button onclick="loadAdminMainWithdrawals()" class="text-sm text-pink-300">Muat ulang</button></div><div id="admin-main-withdrawal-list" class="space-y-3 mt-3">Belum dimuat.</div></div>
             <div><div class="flex justify-between items-center"><h3 class="font-bold text-white">Pengajuan penarikan Token $</h3><button onclick="loadAdminTokenWithdrawals()" class="text-sm text-pink-300">Muat ulang</button></div><div id="admin-token-withdrawal-list" class="space-y-3 mt-3">Belum dimuat.</div></div>
           </div>
         </section>
@@ -1634,7 +1605,6 @@
             const accountName = document.getElementById('token-wd-name').value.trim();
             if (!Number.isSafeInteger(amount) || amount < 20000) return showToast('Minimal penarikan adalah 20.000 token $.');
             if (amount > Number(state.tokenBalance || 0)) return showToast('Saldo token $ tidak mencukupi.');
-            if (!['DANA','OVO'].includes(method)) return showToast('Pilih DANA atau OVO.');
             if (!account || !accountName) return showToast('Lengkapi nomor tujuan dan nama pemilik akun.');
             if (!confirm(`Ajukan penarikan ${tokenNumber(amount)} token $ (Rp${tokenNumber(amount)}) ke ${method} ${account} atas nama ${accountName}?`)) return;
             try {
@@ -1678,29 +1648,6 @@
             } catch(e) { console.error(e); showToast('Gagal memproses. Periksa Firestore Rules.'); }
         }
 
-        async function loadAdminMainWithdrawals() {
-            const box = document.getElementById('admin-main-withdrawal-list');
-            if (!box) return;
-            if (!isAdmin()) { box.textContent = 'Akses ditolak.'; return; }
-            try {
-                const rows = await window.fbListMainWithdrawals();
-                box.innerHTML = rows.length ? rows.map(x => `<div class="p-4 rounded-xl bg-black/30 border border-purple-800 space-y-2"><b class="text-white">${escapeHtml(x.id)}</b><p class="text-xs text-purple-300">${escapeHtml(x.displayName || 'Pengguna')} • ${escapeHtml(x.email || '')} • UID: ${escapeHtml(x.uid || '')}</p><p class="text-lg font-bold text-emerald-300">${formatRupiah(Number(x.amount)||0)}</p><p>Tujuan: ${escapeHtml(x.method || '')} • ${escapeHtml(x.account || '')} • ${escapeHtml(x.accountName || '')}</p><p class="text-xs text-purple-300">Diajukan: ${x.createdAt ? new Date(x.createdAt).toLocaleString('id-ID') : '-'}</p><p class="text-yellow-300">Status: ${escapeHtml(x.status || 'menunggu_admin')}</p>${x.status === 'menunggu_admin' ? `<div class="flex flex-wrap gap-2"><button onclick="finishMainWithdrawal('${x.id}','${x.uid}',${Number(x.amount)||0},'berhasil')" class="px-3 py-2 rounded-lg bg-emerald-700 text-white text-xs font-bold">Tandai sudah dibayar</button><button onclick="finishMainWithdrawal('${x.id}','${x.uid}',${Number(x.amount)||0},'ditolak')" class="px-3 py-2 rounded-lg bg-red-800 text-white text-xs font-bold">Tolak & kembalikan saldo</button></div>` : ''}</div>`).join('') : '<p class="text-sm text-purple-300">Belum ada pengajuan penarikan saldo utama.</p>';
-            } catch (e) { console.error(e); box.textContent = 'Gagal membaca withdrawals. Periksa Firestore Rules.'; }
-        }
-
-        async function finishMainWithdrawal(id, uid, amount, status) {
-            if (!isAdmin() || !confirm(status === 'berhasil' ? 'Pastikan transfer ke e-wallet sudah dilakukan. Tandai selesai?' : 'Tolak pengajuan dan kembalikan saldo pengguna?')) return;
-            try {
-                if (status === 'ditolak') {
-                    const user = await window.fbLoadUserData(uid);
-                    await window.fbSaveUserData(uid, { balance: (Number(user?.balance) || 0) + amount });
-                }
-                await window.fbUpdateMainWithdrawal(id, { status, processedAt: Date.now(), processedBy: currentUser.email });
-                await loadAdminMainWithdrawals();
-                showToast(status === 'berhasil' ? 'Penarikan saldo ditandai selesai.' : 'Pengajuan ditolak dan saldo dikembalikan.');
-            } catch (e) { console.error(e); showToast('Gagal memproses penarikan. Periksa Firestore Rules.'); }
-        }
-
         async function adminSetSpinPrize() {
             if(!isAdmin()) return;
             const uid=document.getElementById('admin-spin-uid').value.trim(); const prize=Number(document.getElementById('admin-spin-prize').value);
@@ -1721,8 +1668,12 @@
         }
         async function loadMyLiveChat() {
             const alias=document.getElementById('live-chat-alias');
+            const input=document.getElementById('live-chat-input');
             if(!currentUser){renderLiveChatMessages([]);return;}
             if(alias) alias.textContent=liveChatAlias(currentUser.uid);
+            // Jangan render ulang daftar pesan saat pengguna sedang mengetik.
+            // Polling 5 detik tetap berjalan, tetapi tidak mengganggu fokus/kursor.
+            if(input && document.activeElement === input) return;
             try { renderLiveChatMessages(await window.fbListMyLiveChat()); }
             catch(e){console.error(e); const box=document.getElementById('live-chat-messages'); if(box)box.textContent='Gagal memuat chat. Periksa Firestore Rules liveChatMessages.';}
         }
@@ -1736,6 +1687,9 @@
         async function loadAdminLiveChat() {
             const box=document.getElementById('admin-live-chat-list'); if(!box)return;
             if(!isAdmin()){box.textContent='Akses ditolak.';return;}
+            // Inbox admin dirender ulang berkala. Tunda render jika salah satu kolom balasan sedang aktif.
+            const active=document.activeElement;
+            if(active && active.id && active.id.startsWith('admin-chat-reply-')) return;
             try {
                 const rows=await window.fbListAllLiveChat();
                 const users=[...new Set(rows.map(x=>x.uid))];
@@ -1773,7 +1727,7 @@
                 targetNav.classList.add('text-white', 'bg-purple-900/60', 'neon-border');
             }
             if (tabId === 'admin') loadAdminReferrals();
-            if (tabId === 'admin-token') { loadAdminTokenTopups(); loadAdminMainWithdrawals(); loadAdminTokenWithdrawals(); }
+            if (tabId === 'admin-token') { loadAdminTokenTopups(); loadAdminTokenWithdrawals(); }
             if (tabId === 'admin-chat') loadAdminLiveChat();
             if (tabId === 'cs') loadMyLiveChat();
             if (tabId === 'wheel') loadMyTokenWithdrawals();
@@ -1907,52 +1861,57 @@
             renderHistoryLists();
         }
 
-        async function withdrawSaldo() {
-            if (!currentUser) return showToast('Login Google dulu untuk mengajukan penarikan.');
+        function withdrawSaldo() {
             const amountInput = document.getElementById('withdraw-amount');
-            const method = document.getElementById('withdraw-method')?.value || 'DANA';
-            const account = document.getElementById('withdraw-account')?.value.trim() || '';
-            const accountName = document.getElementById('withdraw-name')?.value.trim() || '';
-            const requestedAmount = Number((amountInput ? amountInput.value : '').trim());
+            const requestedAmount = Number((amountInput ? amountInput.value : "").trim());
 
-            if (!Number.isSafeInteger(requestedAmount) || requestedAmount < 35000) {
-                showToast('Minimal penarikan saldo adalah Rp35.000.');
+            if (!Number.isSafeInteger(requestedAmount) || requestedAmount <= 0) {
+                showToast("Masukkan nominal penarikan yang valid.");
                 if (amountInput) amountInput.focus();
                 return;
             }
-            if (requestedAmount > Number(state.balance || 0)) return showToast('Nominal penarikan melebihi saldo tersedia.');
-            if (!['DANA', 'OVO'].includes(method)) return showToast('Pilih DANA atau OVO.');
-            if (!account || !accountName) return showToast('Isi nomor HP dan nama pemilik akun e-wallet.');
-            if (!confirm(`Ajukan penarikan ${formatRupiah(requestedAmount)} ke ${method} ${account} atas nama ${accountName}?
-
-Saldo akan dipotong saat pengajuan berhasil. Jika ditolak admin, saldo dikembalikan.`)) return;
-
-            const oldBalance = Number(state.balance || 0);
-            try {
-                const id = await window.fbCreateMainWithdrawal({
-                    amount: requestedAmount,
-                    method,
-                    account,
-                    accountName,
-                    status: 'menunggu_admin'
-                });
-                state.balance = oldBalance - requestedAmount;
-                const wdTime = new Date().toLocaleString('id-ID');
-                state.wdHistory.unshift({ id, amount: requestedAmount, status: 'Menunggu admin', time: wdTime });
-                await window.fbSaveUserData(currentUser.uid, { balance: state.balance, wdHistory: state.wdHistory.slice(0, 50) });
-                if (amountInput) amountInput.value = '';
-                document.getElementById('withdraw-account').value = '';
-                document.getElementById('withdraw-name').value = '';
-                saveLocalData();
-                updateUI();
-                renderHistoryLists();
-                showToast('Pengajuan penarikan berhasil dikirim. Admin akan memprosesnya.');
-            } catch (e) {
-                console.error(e);
-                state.balance = oldBalance;
-                updateUI();
-                showToast('Pengajuan gagal dikirim. Periksa koneksi dan Firestore Rules collection withdrawals.');
+            if (requestedAmount < 35000) {
+                showToast("Minimal penarikan saldo adalah Rp 35.000.");
+                if (amountInput) amountInput.focus();
+                return;
             }
+            if (requestedAmount > state.balance) {
+                showToast("Nominal penarikan melebihi saldo tersedia.");
+                if (amountInput) amountInput.focus();
+                return;
+            }
+
+            // Sarankan login dulu untuk WD (opsional, tapi lebih baik)
+            if (!currentUser) {
+                showToast("Disarankan Login Google dulu supaya riwayat WD tersimpan di akun Anda.");
+            }
+
+            const randomWdCode = 'WD-' + Math.floor(100000 + Math.random() * 900000);
+
+            showModal(
+                "Konfirmasi Penarikan Saldo (WD)",
+                `Ajukan penarikan sebesar ${formatRupiah(requestedAmount)}?\n\nKode WD Anda: ${randomWdCode}\nSisa saldo setelah pengajuan: ${formatRupiah(state.balance - requestedAmount)}.`,
+                () => {
+                    if (requestedAmount > state.balance) {
+                        showToast("Saldo tidak mencukupi. Silakan ulangi pengajuan.");
+                        return;
+                    }
+
+                    state.balance -= requestedAmount;
+                    state.wdHistory.unshift({
+                        id: randomWdCode,
+                        amount: requestedAmount,
+                        status: 'Diproses CS (~10 Menit)',
+                        time: new Date().toLocaleString('id-ID')
+                    });
+
+                    showToast(`Pengajuan WD ${formatRupiah(requestedAmount)} (${randomWdCode}) berhasil!`);
+                    if (amountInput) amountInput.value = '';
+                    saveData(true);
+                    updateUI();
+                    renderHistoryLists();
+                }
+            );
         }
 
         function renderHistoryLists() {
